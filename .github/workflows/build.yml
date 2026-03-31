@@ -2,12 +2,18 @@ name: Build CodeParser EXE
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - name: Checkout
@@ -16,26 +22,35 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller pillow
+          pip install -r requirements-optional.txt
+          pip install pyinstaller pytest pytest-qt
 
-      - name: Generate icon
-        run: python tools/generate_icon.py
+      - name: Run tests
+        run: python -m pytest tests
 
       - name: Build CodeParser.exe
-        run: pyinstaller CodeParser.spec
+        run: pyinstaller --clean --noconfirm CodeParser.spec
 
-      - name: Upload release asset
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeParser-windows
+          path: dist/CodeParser.exe
+
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0
           name: CodeParser v1.0
           make_latest: true
+          overwrite_files: true
           files: dist/CodeParser.exe
           fail_on_unmatched_files: true
           generate_release_notes: true
