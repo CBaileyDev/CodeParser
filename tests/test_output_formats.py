@@ -66,3 +66,44 @@ def test_build_markdown_includes_directory_tree():
     )
     assert "## Directory Structure" in result
     assert "a.py" in result
+
+
+import json as json_lib
+
+from codeparser.json_builder import build_json
+from codeparser.text_builder import build_text
+
+
+def test_build_json_is_valid_json():
+    stats = GenerationStats(total_files=1, total_tokens=50)
+    files = [{"path": "a.py", "content": "x=1", "lines": 1, "tokens": 5, "secrets": 0}]
+    result = build_json(
+        processed_files=files,
+        directory_tree="a.py",
+        stats=stats,
+        repository_name="test-repo",
+        include_git_logs=False,
+        git_log_commits=[],
+    )
+    parsed = json_lib.loads(result)
+    assert parsed["repository"] == "test-repo"
+    assert len(parsed["files"]) == 1
+    assert parsed["files"][0]["path"] == "a.py"
+    assert parsed["files"][0]["content"] == "x=1"
+    assert parsed["stats"]["total_files"] == 1
+
+
+def test_build_text_includes_file_contents():
+    stats = GenerationStats(total_files=1)
+    files = [{"path": "a.py", "content": "x=1", "lines": 1, "tokens": None, "secrets": 0}]
+    result = build_text(
+        processed_files=files,
+        directory_tree="a.py",
+        stats=stats,
+        repository_name="test-repo",
+        include_git_logs=False,
+        git_log_commits=[],
+    )
+    assert "test-repo" in result
+    assert "a.py" in result
+    assert "x=1" in result
