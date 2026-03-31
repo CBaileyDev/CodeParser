@@ -165,12 +165,12 @@ On every push to the `main` branch, a GitHub Actions workflow:
 - Installs dependencies.
 - Generates a simple folder/code icon.
 - Builds a single-file `CodeParser.exe` via PyInstaller and the project spec.
-- Publishes it as an asset on a `latest` GitHub Release.
+- Publishes it as an asset on a `v1.0` GitHub Release (and marks it as the latest release).
 
 You can always download the most recent EXE from:
 
-- **Release page:** https://github.com/CBaileyDev/CodeParser/releases/tag/latest
-- **Direct EXE link:** https://github.com/CBaileyDev/CodeParser/releases/download/latest/CodeParser.exe
+- **Release page:** https://github.com/CBaileyDev/CodeParser/releases/tag/v1.0
+- **Direct EXE link:** https://github.com/CBaileyDev/CodeParser/releases/download/v1.0/CodeParser.exe
 
 The link will become valid after the first successful CI run on `main`.
 
