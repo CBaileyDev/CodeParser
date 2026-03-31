@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict
 
+from .output_format import OutputFormat
+
 PRESET_FILE_NAME = "codeparser_presets.json"
 
 
@@ -26,6 +28,7 @@ class CodeParserConfig:
     include_git_history: bool = False
     count_tokens: bool = True
     secret_scan: bool = False
+    output_format: OutputFormat = OutputFormat.XML
     model_name: str = "gpt-4o-mini"
     max_file_size_bytes: int = 1_000_000  # 1 MB
     preview_mode: bool = False
