@@ -16,7 +16,7 @@ from .ignore_rules import build_ignore_spec, iter_included_files, is_binary_file
 from .secret_scanner import scan_path_for_secrets
 from .token_counter import count_tokens
 from .tree_sitter_compressor import compress_source_with_tree_sitter
-from .xml_builder import build_repomix_xml
+from .output_format import build_output
 
 
 @dataclass
@@ -219,7 +219,8 @@ def generate_xml(
         _collect_git_logs(config.root_path) if config.include_git_history else []
     )
 
-    xml_text = build_repomix_xml(
+    output_text = build_output(
+        config.output_format,
         processed_files=processed_files,
         directory_tree=directory_tree,
         stats=stats,
@@ -228,4 +229,4 @@ def generate_xml(
         git_log_commits=git_log_commits,
     )
 
-    return xml_text, stats
+    return output_text, stats

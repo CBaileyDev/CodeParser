@@ -107,3 +107,31 @@ def test_build_text_includes_file_contents():
     assert "test-repo" in result
     assert "a.py" in result
     assert "x=1" in result
+
+
+from codeparser.output_format import build_output
+
+
+def test_build_output_dispatches_to_correct_builder():
+    stats = GenerationStats(total_files=1, total_tokens=10)
+    files = [{"path": "a.py", "content": "x=1", "lines": 1, "tokens": 5, "secrets": 0}]
+    kwargs = dict(
+        processed_files=files,
+        directory_tree="a.py",
+        stats=stats,
+        repository_name="repo",
+        include_git_logs=False,
+        git_log_commits=[],
+    )
+
+    xml_result = build_output(OutputFormat.XML, **kwargs)
+    assert "<file" in xml_result
+
+    md_result = build_output(OutputFormat.MARKDOWN, **kwargs)
+    assert "# repo" in md_result
+
+    json_result = build_output(OutputFormat.JSON, **kwargs)
+    assert '"repository"' in json_result
+
+    txt_result = build_output(OutputFormat.TEXT, **kwargs)
+    assert "Repository: repo" in txt_result
