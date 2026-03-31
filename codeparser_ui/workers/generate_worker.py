@@ -33,6 +33,7 @@ class GenerateRequest:
 class GenerateResult:
     xml_text: str
     stats: Any
+    output_path: str | None = None
 
 
 class GeneratorEngine(Protocol):
