@@ -30,3 +30,39 @@ class TestConfigOutputFormat:
     def test_config_defaults_to_xml(self) -> None:
         config = CodeParserConfig(root_path=Path("."))
         assert config.output_format == OutputFormat.XML
+
+
+from codeparser.markdown_builder import build_markdown
+from codeparser.parser_core import GenerationStats
+
+
+def test_build_markdown_includes_file_contents():
+    stats = GenerationStats(total_files=1, total_tokens=100)
+    files = [{"path": "src/main.py", "content": "print('hello')", "lines": 1, "tokens": 5, "secrets": 0}]
+    result = build_markdown(
+        processed_files=files,
+        directory_tree="src/\n  main.py",
+        stats=stats,
+        repository_name="test-repo",
+        include_git_logs=False,
+        git_log_commits=[],
+    )
+    assert "# test-repo" in result
+    assert "```" in result
+    assert "print('hello')" in result
+    assert "src/main.py" in result
+
+
+def test_build_markdown_includes_directory_tree():
+    stats = GenerationStats(total_files=1)
+    files = [{"path": "a.py", "content": "x=1", "lines": 1, "tokens": None, "secrets": 0}]
+    result = build_markdown(
+        processed_files=files,
+        directory_tree="a.py",
+        stats=stats,
+        repository_name="repo",
+        include_git_logs=False,
+        git_log_commits=[],
+    )
+    assert "## Directory Structure" in result
+    assert "a.py" in result
