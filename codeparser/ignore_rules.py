@@ -75,7 +75,7 @@ def build_ignore_spec(root: Path) -> Optional[PathSpec]:
     patterns.extend(_load_patterns_from_file(root / ".codeparserignore"))
     if not patterns:
         return None
-    return PathSpec.from_lines("gitwildmatch", patterns)
+    return PathSpec.from_lines("gitignore", patterns)
 
 
 def is_binary_file(path: Path, sample_size: int = 1024) -> bool:

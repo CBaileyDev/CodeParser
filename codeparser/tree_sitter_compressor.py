@@ -10,7 +10,7 @@ try:  # pragma: no cover - import guard
     from tree_sitter_languages import get_parser  # type: ignore
 
     HAS_TREE_SITTER = True
-except ImportError:  # pragma: no cover
+except Exception:  # pragma: no cover
     HAS_TREE_SITTER = False
     logger.info(
         "tree-sitter-languages not installed; structural compression will be disabled.",
@@ -35,6 +35,10 @@ EXTENSION_LANGUAGE_MAP = {
 
 def _guess_language_from_extension(path: Path) -> Optional[str]:
     return EXTENSION_LANGUAGE_MAP.get(path.suffix.lower())
+
+
+def is_advanced_compression_available() -> bool:
+    return HAS_TREE_SITTER
 
 
 def compress_source_with_tree_sitter(source: str, path: Path) -> str:

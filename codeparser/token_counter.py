@@ -14,8 +14,11 @@ def _get_encoding(model_name: str):
     try:
         return tiktoken.encoding_for_model(model_name)
     except Exception:
-        # Fall back to a generic encoding if the specific model is unknown.
-        return tiktoken.get_encoding("cl100k_base")
+        try:
+            # Fall back to a generic encoding if the specific model is unknown.
+            return tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            return None
 
 
 def count_tokens(text: str, model_name: str = "gpt-4o-mini") -> Optional[int]:

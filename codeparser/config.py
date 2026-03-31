@@ -19,6 +19,7 @@ class CodeParserConfig:
     """
 
     root_path: Path
+    display_name: str | None = None
     compress: bool = False
     remove_comments: bool = False
     include_git_history: bool = False
@@ -70,6 +71,7 @@ def config_to_preset_dict(config: CodeParserConfig) -> Dict[str, Any]:
     data = asdict(config).copy()
     # Do not persist path or preview-only settings.
     data.pop("root_path", None)
+    data.pop("display_name", None)
     data.pop("preview_mode", None)
     return data
 

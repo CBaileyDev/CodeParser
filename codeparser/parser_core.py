@@ -22,6 +22,41 @@ class GenerationStats:
     secrets_found: int = 0
 
 
+def _build_directory_tree(paths: list[str]) -> str:
+    tree: dict[str, dict | None] = {}
+
+    for rel_path in sorted(paths):
+        node = tree
+        parts = [part for part in rel_path.split("/") if part]
+        for directory in parts[:-1]:
+            next_node = node.setdefault(directory, {})
+            if not isinstance(next_node, dict):
+                next_node = {}
+                node[directory] = next_node
+            node = next_node
+        if parts:
+            node[parts[-1]] = None
+
+    lines: list[str] = []
+
+    def walk(node: dict[str, dict | None], depth: int) -> None:
+        indent = "  " * depth
+        directories = sorted(name for name, child in node.items() if isinstance(child, dict))
+        files = sorted(name for name, child in node.items() if child is None)
+
+        for directory in directories:
+            lines.append(f"{indent}{directory}/")
+            child = node[directory]
+            if isinstance(child, dict):
+                walk(child, depth + 1)
+
+        for filename in files:
+            lines.append(f"{indent}{filename}")
+
+    walk(tree, 0)
+    return "\n".join(lines)
+
+
 def _should_skip_file(path: Path, config: CodeParserConfig) -> bool:
     try:
         if path.stat().st_size > config.max_file_size_bytes:
@@ -167,15 +202,7 @@ def generate_xml(
     stats.total_tokens = total_tokens
     stats.secrets_found = total_secrets
 
-    # Build a simple directory tree representation.
-    directory_tree_lines: list[str] = [config.root_path.name]
-    for rel_path in sorted({f["path"] for f in processed_files}):
-        depth = rel_path.count("/")
-        indent = "  " * depth
-        name = Path(rel_path).name
-        directory_tree_lines.append(f"{indent}{name}")
-
-    directory_tree = "\n".join(directory_tree_lines)
+    directory_tree = _build_directory_tree([f["path"] for f in processed_files])
 
     git_log_commits = (
         _collect_git_logs(config.root_path) if config.include_git_history else []
@@ -185,6 +212,7 @@ def generate_xml(
         processed_files=processed_files,
         directory_tree=directory_tree,
         stats=stats,
+        repository_name=config.display_name or config.root_path.name or "repo",
         include_git_logs=config.include_git_history,
         git_log_commits=git_log_commits,
     )
