@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QFrame, QMainWindow, QVBoxLayout, QWidget
 
 from .frameless_window import (
-    DWMWCP_ROUND,
     DWMWA_USE_IMMERSIVE_DARK_MODE,
     DWMWA_WINDOW_CORNER_PREFERENCE,
+    DWMWCP_ROUND,
     IS_WINDOWS,
     NativeFramelessWindow,
 )
@@ -22,6 +22,7 @@ class NativeTitleBarWindow(QMainWindow):
         super().__init__()
         self.uses_custom_shell = False
         self._theme_manager = theme_manager
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
 
         self.setMinimumSize(1100, 720)
         self.resize(1440, 900)
@@ -63,9 +64,22 @@ class NativeTitleBarWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._update_surface_window_state()
         self._apply_native_chrome()
         if self._theme_manager is not None:
             self._on_theme_changed(self._theme_manager.tokens)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            self._update_surface_window_state()
+
+    def _update_surface_window_state(self) -> None:
+        state = "maximized" if self.isMaximized() else "normal"
+        self._surface.setProperty("windowState", state)
+        self._surface.style().unpolish(self._surface)
+        self._surface.style().polish(self._surface)
+        self._surface.update()
 
     def _apply_native_chrome(self) -> None:
         if not IS_WINDOWS:
@@ -109,6 +123,7 @@ class WindowShell(NativeFramelessWindow):
         super().__init__()
         self.uses_custom_shell = True
         self._theme_manager = theme_manager
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._central.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -123,7 +138,6 @@ class WindowShell(NativeFramelessWindow):
 
         self.title_bar = TitleBar(self)
         self.title_bar.minimize_requested.connect(self.showMinimized)
-        self.title_bar.maximize_restore_requested.connect(self._toggle_max_restore)
         self.title_bar.close_requested.connect(self.close)
         surface_layout.addWidget(self.title_bar)
 
@@ -157,15 +171,7 @@ class WindowShell(NativeFramelessWindow):
         if self._theme_manager is not None:
             self.update_dark_mode(self._theme_manager.tokens.is_dark)
 
-    def _toggle_max_restore(self) -> None:
-        if self.isMaximized():
-            self.showNormal()
-        else:
-            self.showMaximized()
-
-    def _on_window_state_changed(self) -> None:
-        """Update surface styling when maximized/restored."""
-        maximized = self.isMaximized()
+    def _refresh_surface_window_state(self, maximized: bool) -> None:
         state = "maximized" if maximized else "normal"
         margin = 0 if maximized else self.NORMAL_MARGIN
 
@@ -176,6 +182,10 @@ class WindowShell(NativeFramelessWindow):
         self._surface.style().unpolish(self._surface)
         self._surface.style().polish(self._surface)
         self._surface.update()
+
+    def _on_window_state_changed(self) -> None:
+        """Update surface styling when maximized/restored."""
+        self._refresh_surface_window_state(self.isMaximized())
 
     def _on_theme_changed(self, tokens) -> None:
         self.update_dark_mode(tokens.is_dark)

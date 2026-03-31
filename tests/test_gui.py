@@ -6,8 +6,10 @@ from pathlib import Path
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 
+from codeparser.output_format import OutputFormat
 
-def test_main_window_uses_theme_selector_with_system_default(qtbot, tmp_path) -> None:
+
+def test_main_window_uses_theme_selector_with_dark_default(qtbot, tmp_path) -> None:
     module = importlib.import_module("codeparser.gui.main_window")
     bootstrap_module = importlib.import_module("codeparser_ui.bootstrap")
     theme_module = importlib.import_module("codeparser_ui.theme_manager")
@@ -19,7 +21,7 @@ def test_main_window_uses_theme_selector_with_system_default(qtbot, tmp_path) ->
     qtbot.addWidget(window)
 
     assert window.theme_mode_combo.count() == 3
-    assert window.theme_mode_combo.currentData() == theme_module.ThemeMode.SYSTEM
+    assert window.theme_mode_combo.currentData() == theme_module.ThemeMode.DARK
     assert module.QApplication.instance().styleSheet().strip()
 
 
@@ -49,9 +51,9 @@ def test_main_window_starts_with_generate_tab_ready_state(qtbot) -> None:
     assert window.tab_widget.tabText(1) == "Build"
     assert window.tab_widget.currentWidget() is window.generate_tab
     assert window.target_edit.text() == ""
-    assert window.output_editor.toPlainText() == ""
-    assert window.copy_btn.isEnabled() is False
-    assert window.save_btn.isEnabled() is False
+    assert window.generate_tab.success_banner.isVisible() is False
+    assert window.generate_tab.generate_btn.isEnabled() is False
+    assert window.generate_tab.format_combo.currentData() == OutputFormat.MARKDOWN
     assert "Ready to preview" in window.generate_tab.preview_detail_label.text()
 
 
@@ -60,8 +62,8 @@ def test_build_tab_has_placeholder_copy(qtbot) -> None:
     window = module.MainWindow()
     qtbot.addWidget(window)
 
-    assert "Rebuild a project from packed XML" in window.build_tab.placeholder_title.text()
-    assert "coming soon" in window.build_tab.placeholder_body.text().lower()
+    assert "Rebuild a project from packed files" in window.build_tab.placeholder_title.text()
+    assert "next feature being built" in window.build_tab.placeholder_body.text().lower()
 
 
 def test_generate_tab_does_not_preview_until_target_is_selected(qtbot, monkeypatch) -> None:
@@ -163,6 +165,8 @@ def test_generate_tab_runs_generation_without_process_events(
 
     tab = module.GenerateTab(initial_target=str(root), auto_refresh_preview=False)
     qtbot.addWidget(tab)
+    target_output = tmp_path / "dist" / "codeparser-test.md"
+    monkeypatch.setattr(tab, "_default_output_path", lambda _display_name, _fmt=None: target_output)
 
     try:
         tab._on_generate()
@@ -171,7 +175,9 @@ def test_generate_tab_runs_generation_without_process_events(
 
     assert calls == []
     assert tab.generate_btn.isEnabled() is False
-    qtbot.waitUntil(lambda: tab.output_editor.toPlainText() == "<file_summary />", timeout=3_000)
-    assert tab.copy_btn.isEnabled() is True
-    assert tab.save_btn.isEnabled() is True
-    assert "Generated XML for 1 files." in tab.status_label.text()
+    qtbot.waitUntil(lambda: tab._last_output_path == target_output.resolve(), timeout=3_000)
+    assert tab.success_banner.isHidden() is False
+    assert tab.open_folder_btn.isHidden() is False
+    assert tab.copy_path_btn.isHidden() is False
+    assert target_output.read_text(encoding="utf-8") == "<file_summary />"
+    assert "Saved to" in tab.status_label.text()

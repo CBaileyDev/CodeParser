@@ -13,11 +13,9 @@ from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -31,17 +29,17 @@ from codeparser_ui.workers.generate_worker import (
     ParserCoreGenerateEngine,
 )
 
-from ..config import CodeParserConfig, apply_preset_to_config
+from ..config import CodeParserConfig
+from ..output_format import OutputFormat
 from ..parser_core import GenerationStats, generate_xml
 from ..remote import RemoteResolutionError, ResolvedTarget, is_github_url, resolve_target
 from ..tree_sitter_compressor import is_advanced_compression_available
-from .preset_manager import delete_preset, list_preset_names, load_preset, save_preset
 
 __all__ = ["GenerateTab"]
 
 
 class GenerateTab(QWidget):
-    """Primary XML-generation workflow for the desktop shell."""
+    """Primary generation workflow for the desktop shell."""
 
     def __init__(
         self,
@@ -68,7 +66,6 @@ class GenerateTab(QWidget):
         self._preview_timer.timeout.connect(self._update_token_preview)
 
         self._build_ui(initial_target or "")
-        self._refresh_presets()
         self._sync_ready_state()
         self._generate_controller.busy_changed.connect(self._set_busy)
         self._generate_controller.result_ready.connect(self._on_generation_finished)
@@ -79,27 +76,28 @@ class GenerateTab(QWidget):
     # ------------------------------------------------------------------
     def _build_ui(self, initial_target: str) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
+        # -- Hero panel --
         hero = QFrame(self)
         hero.setObjectName("CodeParserPanel")
         hero.setProperty("surface", "panel")
         hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(18, 18, 18, 18)
+        hero_layout.setContentsMargins(20, 20, 20, 20)
         hero_layout.setSpacing(12)
 
         eyebrow = QLabel("GENERATE WORKFLOW", hero)
         eyebrow.setObjectName("CodeParserEyebrow")
         hero_layout.addWidget(eyebrow)
 
-        title = QLabel("Pack a repo into Repomix-style XML", hero)
+        title = QLabel("Pack a repo into an AI-ready file", hero)
         title.setObjectName("CodeParserTitle")
         title.setWordWrap(True)
         hero_layout.addWidget(title)
 
         body = QLabel(
-            "Choose a local folder or GitHub repository, tune a few packing options, and generate a single AI-friendly XML artifact.",
+            "Choose a local folder or GitHub repository, pick an output format, and generate a single packed file.",
             hero,
         )
         body.setObjectName("CodeParserBody")
@@ -109,7 +107,6 @@ class GenerateTab(QWidget):
 
         target_row = QHBoxLayout()
         target_row.setSpacing(10)
-
         self.target_edit = QLineEdit(initial_target)
         self.target_edit.setPlaceholderText(
             "Select a local folder or paste a GitHub repository URL",
@@ -122,86 +119,31 @@ class GenerateTab(QWidget):
         target_row.addWidget(self.browse_btn)
         hero_layout.addLayout(target_row)
 
-        hint_row = QHBoxLayout()
-        hint_row.setSpacing(10)
-
-        self.target_hint = QLabel(
+        hint = QLabel(
             "Tip: drag a folder onto the window, or paste a GitHub URL such as https://github.com/user/repo",
             hero,
         )
-        self.target_hint.setObjectName("CodeParserBody")
-        self.target_hint.setProperty("tone", "secondary")
-        self.target_hint.setWordWrap(True)
-        hint_row.addWidget(self.target_hint, 1)
-
-        self.generate_btn = QPushButton("Generate XML")
-        self.generate_btn.setProperty("variant", "primary")
-        self.generate_btn.clicked.connect(self._on_generate)
-        hint_row.addWidget(self.generate_btn)
-        hero_layout.addLayout(hint_row)
+        hint.setObjectName("CodeParserBody")
+        hint.setProperty("tone", "secondary")
+        hint.setWordWrap(True)
+        hero_layout.addWidget(hint)
 
         layout.addWidget(hero)
 
-        controls_surface = QFrame(self)
-        controls_surface.setObjectName("CodeParserSurface")
-        controls_surface.setProperty("surface", "panel")
-        controls_layout = QGridLayout(controls_surface)
-        controls_layout.setContentsMargins(18, 18, 18, 18)
-        controls_layout.setHorizontalSpacing(14)
-        controls_layout.setVerticalSpacing(14)
+        # -- Options panel --
+        options_surface = QFrame(self)
+        options_surface.setObjectName("CodeParserSurface")
+        options_surface.setProperty("surface", "panel")
+        options_layout = QVBoxLayout(options_surface)
+        options_layout.setContentsMargins(20, 16, 20, 16)
+        options_layout.setSpacing(12)
 
-        preset_panel = QFrame(controls_surface)
-        preset_panel.setObjectName("CodeParserInset")
-        preset_panel.setProperty("surface", "elevated")
-        preset_layout = QVBoxLayout(preset_panel)
-        preset_layout.setContentsMargins(14, 14, 14, 14)
-        preset_layout.setSpacing(8)
-
-        preset_label = QLabel("Presets", preset_panel)
-        preset_label.setObjectName("CodeParserMetricLabel")
-        preset_layout.addWidget(preset_label)
-
-        preset_row = QHBoxLayout()
-        preset_row.setSpacing(8)
-        self.preset_combo = QComboBox()
-        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
-        preset_row.addWidget(self.preset_combo, 1)
-
-        self.save_preset_btn = QPushButton("Save")
-        self.save_preset_btn.setProperty("variant", "toolbar")
-        self.save_preset_btn.clicked.connect(self._on_save_preset)
-        preset_row.addWidget(self.save_preset_btn)
-
-        self.delete_preset_btn = QPushButton("Delete")
-        self.delete_preset_btn.setProperty("variant", "danger")
-        self.delete_preset_btn.clicked.connect(self._on_delete_preset)
-        preset_row.addWidget(self.delete_preset_btn)
-        preset_layout.addLayout(preset_row)
-
-        preset_hint = QLabel(
-            "Save a repeatable packing setup for quick reuse.",
-            preset_panel,
-        )
-        preset_hint.setObjectName("CodeParserBody")
-        preset_hint.setProperty("tone", "secondary")
-        preset_hint.setWordWrap(True)
-        preset_layout.addWidget(preset_hint)
-
-        controls_layout.addWidget(preset_panel, 0, 0)
-
-        options_panel = QFrame(controls_surface)
-        options_panel.setObjectName("CodeParserInset")
-        options_panel.setProperty("surface", "elevated")
-        options_layout = QVBoxLayout(options_panel)
-        options_layout.setContentsMargins(14, 14, 14, 14)
-        options_layout.setSpacing(10)
-
-        options_label = QLabel("Packing options", options_panel)
-        options_label.setObjectName("CodeParserMetricLabel")
-        options_layout.addWidget(options_label)
+        options_header = QLabel("PACKING OPTIONS", options_surface)
+        options_header.setObjectName("CodeParserEyebrow")
+        options_layout.addWidget(options_header)
 
         options_grid = QGridLayout()
-        options_grid.setHorizontalSpacing(10)
+        options_grid.setHorizontalSpacing(20)
         options_grid.setVerticalSpacing(8)
 
         self.compress_cb = QCheckBox("Compress code (Tree-sitter)")
@@ -218,102 +160,105 @@ class GenerateTab(QWidget):
 
         options_grid.addWidget(self.compress_cb, 0, 0)
         options_grid.addWidget(self.remove_comments_cb, 0, 1)
-        options_grid.addWidget(self.include_git_history_cb, 1, 0)
-        options_grid.addWidget(self.count_tokens_cb, 1, 1)
-        options_grid.addWidget(self.secret_scan_cb, 2, 0)
+        options_grid.addWidget(self.include_git_history_cb, 0, 2)
+        options_grid.addWidget(self.count_tokens_cb, 1, 0)
+        options_grid.addWidget(self.secret_scan_cb, 1, 1)
         options_layout.addLayout(options_grid)
 
-        controls_layout.addWidget(options_panel, 0, 1)
+        action_row = QHBoxLayout()
+        action_row.setSpacing(10)
 
-        preview_panel = QFrame(controls_surface)
-        preview_panel.setObjectName("CodeParserInset")
-        preview_panel.setProperty("surface", "elevated")
-        preview_layout = QVBoxLayout(preview_panel)
-        preview_layout.setContentsMargins(14, 14, 14, 14)
-        preview_layout.setSpacing(8)
+        format_label = QLabel("Output format:", options_surface)
+        format_label.setObjectName("CodeParserBody")
+        action_row.addWidget(format_label)
 
-        preview_label = QLabel("Live preview", preview_panel)
-        preview_label.setObjectName("CodeParserMetricLabel")
-        preview_layout.addWidget(preview_label)
+        self.format_combo = QComboBox(options_surface)
+        self.format_combo.setAccessibleName("Output format selector")
+        for fmt in OutputFormat:
+            self.format_combo.addItem(fmt.display_name, fmt)
+        md_index = self.format_combo.findData(OutputFormat.MARKDOWN)
+        if md_index >= 0:
+            self.format_combo.setCurrentIndex(md_index)
+        action_row.addWidget(self.format_combo)
 
-        metrics_row = QHBoxLayout()
-        metrics_row.setSpacing(10)
-        metrics_row.addLayout(self._create_metric_block("Files sampled", "0", "preview_files_value"))
-        metrics_row.addLayout(self._create_metric_block("Sample tokens", "0", "preview_tokens_value"))
-        metrics_row.addLayout(self._create_metric_block("Source", "Local", "preview_source_value"))
-        preview_layout.addLayout(metrics_row)
+        action_row.addStretch(1)
 
-        self.preview_detail_label = QLabel(
-            "Ready to preview the selected target.",
-            preview_panel,
-        )
+        self.generate_btn = QPushButton("Generate")
+        self.generate_btn.setProperty("variant", "primary")
+        self.generate_btn.clicked.connect(self._on_generate)
+        action_row.addWidget(self.generate_btn)
+
+        options_layout.addLayout(action_row)
+        layout.addWidget(options_surface)
+
+        # -- Live preview metrics (compact) --
+        preview_surface = QFrame(self)
+        preview_surface.setObjectName("CodeParserSurface")
+        preview_surface.setProperty("surface", "panel")
+        preview_layout = QHBoxLayout(preview_surface)
+        preview_layout.setContentsMargins(20, 14, 20, 14)
+        preview_layout.setSpacing(20)
+
+        preview_layout.addLayout(self._create_metric_block("Files", "0", "preview_files_value"))
+        preview_layout.addLayout(self._create_metric_block("Tokens", "0", "preview_tokens_value"))
+        preview_layout.addLayout(self._create_metric_block("Source", "Local", "preview_source_value"))
+
+        self.preview_detail_label = QLabel("Ready to preview.", preview_surface)
         self.preview_detail_label.setObjectName("CodeParserBody")
         self.preview_detail_label.setProperty("tone", "secondary")
         self.preview_detail_label.setWordWrap(True)
-        preview_layout.addWidget(self.preview_detail_label)
+        preview_layout.addWidget(self.preview_detail_label, 1)
 
-        controls_layout.addWidget(preview_panel, 1, 0, 1, 2)
-        layout.addWidget(controls_surface)
+        layout.addWidget(preview_surface)
 
-        output_surface = QFrame(self)
-        output_surface.setObjectName("CodeParserSurface")
-        output_surface.setProperty("surface", "panel")
-        output_layout = QVBoxLayout(output_surface)
-        output_layout.setContentsMargins(18, 18, 18, 18)
-        output_layout.setSpacing(10)
-
-        output_header = QHBoxLayout()
-        output_header.setSpacing(10)
-
-        output_title_wrap = QVBoxLayout()
-        output_title_wrap.setSpacing(2)
-
-        output_eyebrow = QLabel("XML OUTPUT", output_surface)
-        output_eyebrow.setObjectName("CodeParserEyebrow")
-        output_title_wrap.addWidget(output_eyebrow)
-
-        output_title = QLabel("Generated package", output_surface)
-        output_title.setObjectName("CodeParserTitle")
-        output_title_wrap.addWidget(output_title)
-        output_header.addLayout(output_title_wrap, 1)
-
-        self.copy_btn = QPushButton("Copy XML")
-        self.copy_btn.setProperty("variant", "toolbar")
-        self.copy_btn.clicked.connect(self._on_copy_xml)
-        self.copy_btn.setEnabled(False)
-        output_header.addWidget(self.copy_btn)
-
-        self.save_btn = QPushButton("Save As...")
-        self.save_btn.setProperty("variant", "toolbar")
-        self.save_btn.clicked.connect(self._on_save_xml)
-        self.save_btn.setEnabled(False)
-        output_header.addWidget(self.save_btn)
-
-        output_layout.addLayout(output_header)
-
-        self.status_label = QLabel(
-            "Ready to pack. Review the target and options above, then generate when you are ready.",
-            output_surface,
-        )
-        self.status_label.setObjectName("CodeParserBody")
-        self.status_label.setProperty("tone", "secondary")
-        self.status_label.setWordWrap(True)
-        output_layout.addWidget(self.status_label)
-
+        # -- Progress bar (hidden by default) --
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
         self.progress_bar.setVisible(False)
-        output_layout.addWidget(self.progress_bar)
+        layout.addWidget(self.progress_bar)
 
-        self.output_editor = QPlainTextEdit()
-        self.output_editor.setReadOnly(True)
-        self.output_editor.setPlaceholderText(
-            "Your packed XML will appear here after generation.",
-        )
-        output_layout.addWidget(self.output_editor, 1)
+        # -- Success banner (hidden by default) --
+        self.success_banner = QFrame(self)
+        self.success_banner.setObjectName("CodeParserSurface")
+        self.success_banner.setProperty("surface", "elevated")
+        self.success_banner.setVisible(False)
+        banner_layout = QVBoxLayout(self.success_banner)
+        banner_layout.setContentsMargins(20, 16, 20, 16)
+        banner_layout.setSpacing(10)
 
-        layout.addWidget(output_surface, 1)
+        self.banner_title = QLabel("Generation complete", self.success_banner)
+        self.banner_title.setObjectName("CodeParserTitle")
+        self.banner_title.setStyleSheet("font-size: 18px;")
+        banner_layout.addWidget(self.banner_title)
 
+        self.status_label = QLabel("", self.success_banner)
+        self.status_label.setObjectName("CodeParserBody")
+        self.status_label.setProperty("tone", "secondary")
+        self.status_label.setWordWrap(True)
+        banner_layout.addWidget(self.status_label)
+
+        banner_actions = QHBoxLayout()
+        banner_actions.setSpacing(10)
+
+        self.open_folder_btn = QPushButton("Open folder")
+        self.open_folder_btn.setProperty("variant", "toolbar")
+        self.open_folder_btn.clicked.connect(self._on_open_output_folder)
+        self.open_folder_btn.setVisible(False)
+        banner_actions.addWidget(self.open_folder_btn)
+
+        self.copy_path_btn = QPushButton("Copy path")
+        self.copy_path_btn.setProperty("variant", "toolbar")
+        self.copy_path_btn.clicked.connect(self._on_copy_output_path)
+        self.copy_path_btn.setVisible(False)
+        banner_actions.addWidget(self.copy_path_btn)
+
+        banner_actions.addStretch(1)
+        banner_layout.addLayout(banner_actions)
+
+        layout.addWidget(self.success_banner)
+        layout.addStretch(1)
+
+        # -- Connections --
         self.target_edit.textChanged.connect(self._on_target_changed)
         for cb in (
             self.compress_cb,
@@ -334,7 +279,7 @@ class GenerateTab(QWidget):
         self.preview_files_value.setText("0")
         self.preview_tokens_value.setText("0")
         self.preview_source_value.setText("Local")
-        self.preview_detail_label.setText("Ready to preview the selected target.")
+        self.preview_detail_label.setText("Ready to preview.")
 
     def _create_metric_block(self, label_text: str, initial_value: str, attr_name: str) -> QVBoxLayout:
         block = QVBoxLayout()
@@ -377,58 +322,6 @@ class GenerateTab(QWidget):
             event.ignore()
 
     # ------------------------------------------------------------------
-    # Presets
-    # ------------------------------------------------------------------
-    def _refresh_presets(self) -> None:
-        names = list_preset_names()
-        self.preset_combo.blockSignals(True)
-        self.preset_combo.clear()
-        self.preset_combo.addItem("<unsaved>")
-        for name in names:
-            self.preset_combo.addItem(name)
-        self.preset_combo.blockSignals(False)
-
-    def _on_preset_changed(self, index: int) -> None:
-        name = self.preset_combo.itemText(index)
-        if not name or name == "<unsaved>":
-            return
-        preset = load_preset(name)
-        if not preset:
-            return
-        config, resolved = self._build_config(preview=False)
-        try:
-            config = apply_preset_to_config(config, preset)
-            self.compress_cb.setChecked(config.compress)
-            self.remove_comments_cb.setChecked(config.remove_comments)
-            self.include_git_history_cb.setChecked(config.include_git_history)
-            self.count_tokens_cb.setChecked(config.count_tokens)
-            self.secret_scan_cb.setChecked(config.secret_scan)
-            self._update_token_preview()
-        finally:
-            self._cleanup_resolved_target(resolved)
-
-    def _on_save_preset(self) -> None:
-        name, ok = QInputDialog.getText(self, "Save Preset", "Preset name:")
-        if not ok or not name.strip():
-            return
-        config, resolved = self._build_config(preview=False)
-        try:
-            save_preset(name.strip(), config)
-            self._refresh_presets()
-            idx = self.preset_combo.findText(name.strip())
-            if idx >= 0:
-                self.preset_combo.setCurrentIndex(idx)
-        finally:
-            self._cleanup_resolved_target(resolved)
-
-    def _on_delete_preset(self) -> None:
-        name = self.preset_combo.currentText()
-        if not name or name == "<unsaved>":
-            return
-        delete_preset(name)
-        self._refresh_presets()
-
-    # ------------------------------------------------------------------
     # Target/config helpers
     # ------------------------------------------------------------------
     def _release_cached_remote_target(self) -> None:
@@ -457,6 +350,9 @@ class GenerateTab(QWidget):
 
     def _build_config(self, preview: bool = False) -> tuple[CodeParserConfig, ResolvedTarget]:
         resolved = self._resolve_current_target()
+        selected_format = self.format_combo.currentData()
+        if not isinstance(selected_format, OutputFormat):
+            selected_format = OutputFormat.XML
         return (
             CodeParserConfig(
                 root_path=resolved.root_path,
@@ -467,6 +363,7 @@ class GenerateTab(QWidget):
                 include_git_history=self.include_git_history_cb.isChecked(),
                 count_tokens=self.count_tokens_cb.isChecked(),
                 secret_scan=self.secret_scan_cb.isChecked(),
+                output_format=selected_format,
                 preview_mode=preview,
             ),
             resolved,
@@ -477,10 +374,13 @@ class GenerateTab(QWidget):
             return
         resolved.cleanup()
 
-    def _default_output_path(self, display_name: str) -> Path:
+    def _default_output_path(self, display_name: str, fmt: OutputFormat | None = None) -> Path:
+        if fmt is None:
+            fmt = OutputFormat.XML
         date_str = datetime.now().strftime("%Y%m%d")
         slug = re.sub(r"[^A-Za-z0-9._-]+", "-", display_name.strip()).strip("-") or "repo"
-        return Path.cwd() / f"codeparser-{slug}-{date_str}.xml"
+        dist_dir = Path.cwd() / "dist"
+        return dist_dir / f"codeparser-{slug}-{date_str}{fmt.extension}"
 
     def _on_target_changed(self) -> None:
         self._release_cached_remote_target()
@@ -560,9 +460,9 @@ class GenerateTab(QWidget):
         self.include_git_history_cb.setEnabled(not busy)
         self.count_tokens_cb.setEnabled(not busy)
         self.secret_scan_cb.setEnabled(not busy)
-        self.preset_combo.setEnabled(not busy)
-        self.save_preset_btn.setEnabled(not busy)
-        self.delete_preset_btn.setEnabled(not busy)
+        self.format_combo.setEnabled(not busy)
+        if busy:
+            self.success_banner.setVisible(False)
 
     def _generate_xml(self) -> tuple[str, GenerationStats]:
         config, resolved = self._build_config(preview=False)
@@ -616,7 +516,7 @@ class GenerateTab(QWidget):
             self.status_label.setText("Generation failed.")
             return
 
-        self.status_label.setText("Generating packed XML...")
+        self.status_label.setText("Generating packed output...")
         if not self._generate_controller.submit(request):
             self._cleanup_resolved_target(resolved)
             self.status_label.setText("Generation is already in progress.")
@@ -626,59 +526,68 @@ class GenerateTab(QWidget):
 
     def _on_generation_finished(self, result: GenerateResult) -> None:
         self._cleanup_active_generation_target()
-        self.copy_btn.setEnabled(True)
-        self.save_btn.setEnabled(True)
-        self.output_editor.setPlainText(result.xml_text)
+        self.banner_title.setText("Generation complete")
 
         stats = result.stats
-        summary = f"Generated XML for {stats.total_files} files."
+        selected_format = self.format_combo.currentData()
+        if not isinstance(selected_format, OutputFormat):
+            selected_format = OutputFormat.XML
+
+        # Auto-save to dist/ folder
+        try:
+            config, resolved = self._build_config(preview=False)
+            display_name = config.display_name or resolved.display_name
+            self._cleanup_resolved_target(resolved)
+        except Exception:
+            display_name = "repo"
+
+        output_path = self._default_output_path(display_name, selected_format)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(result.xml_text, encoding="utf-8")
+        self._last_output_path = output_path.resolve()
+
+        # Show success banner
+        summary = f"Saved to {output_path}"
         if stats.total_tokens is not None:
-            summary += f" Tokens: {stats.total_tokens}."
+            summary += f"  |  {stats.total_files} files  |  {stats.total_tokens} tokens"
+        else:
+            summary += f"  |  {stats.total_files} files"
         if stats.secrets_found:
-            summary += f" Potential secrets: {stats.secrets_found}."
+            summary += f"  |  {stats.secrets_found} potential secrets"
         if self.compress_cb.isChecked() and not is_advanced_compression_available():
-            summary += " Tree-sitter compression was unavailable, so CodeParser kept the original source."
+            summary += "  |  Tree-sitter unavailable, kept original source"
+
         self.status_label.setText(summary)
+        self.success_banner.setVisible(True)
+        self.open_folder_btn.setVisible(True)
+        self.copy_path_btn.setVisible(True)
 
     def _on_generation_failed(self, summary: str, _trace: str) -> None:
         self._cleanup_active_generation_target()
-        QMessageBox.critical(self, "Error", f"Generation failed:\n{summary}")
-        self.status_label.setText("Generation failed.")
+        self.success_banner.setVisible(True)
+        self.banner_title.setText("Generation failed")
+        self.status_label.setText(summary)
+        self.open_folder_btn.setVisible(False)
+        self.copy_path_btn.setVisible(False)
 
-    def _on_copy_xml(self) -> None:
-        xml = self.output_editor.toPlainText()
-        if not xml:
-            return
-        QApplication.clipboard().setText(xml)
-        self.status_label.setText("XML copied to the clipboard.")
+    # ------------------------------------------------------------------
+    # Banner actions
+    # ------------------------------------------------------------------
+    def _on_open_output_folder(self) -> None:
+        if self._last_output_path and self._last_output_path.parent.exists():
+            import subprocess
+            import sys
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", "/select,", str(self._last_output_path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(self._last_output_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(self._last_output_path.parent)])
 
-    def _on_save_xml(self) -> None:
-        xml = self.output_editor.toPlainText()
-        if not xml:
-            return
-        resolved: ResolvedTarget | None = None
-        try:
-            config, resolved = self._build_config(preview=False)
-            suggested = self._default_output_path(
-                config.display_name or resolved.display_name,
-            )
-        except Exception:
-            suggested = self._default_output_path("repo")
-        finally:
-            if resolved is not None:
-                self._cleanup_resolved_target(resolved)
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save XML As",
-            str(suggested),
-            "XML files (*.xml);;All files (*.*)",
-        )
-        if not path:
-            return
-        output_path = Path(path)
-        output_path.write_text(xml, encoding="utf-8")
-        self._last_output_path = output_path.resolve()
-        self.status_label.setText(f"Saved XML to {output_path}.")
+    def _on_copy_output_path(self) -> None:
+        if self._last_output_path:
+            QApplication.clipboard().setText(str(self._last_output_path))
+            self.status_label.setText(f"Path copied: {self._last_output_path}")
 
     def closeEvent(self, event):  # type: ignore[override]
         if self._generate_controller.busy:

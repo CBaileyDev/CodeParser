@@ -10,13 +10,10 @@ import ctypes
 import ctypes.wintypes
 import sys
 
-from PyQt6.QtCore import QByteArray, QPoint, QEvent
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout
+from PyQt6.QtCore import QByteArray, QPoint, QEvent, Qt
+from PyQt6.QtWidgets import QAbstractButton, QMainWindow, QWidget, QVBoxLayout
 
 
-# --------------------------------------------------
-# Windows API constants
-# --------------------------------------------------
 HTCLIENT = 1
 HTCAPTION = 2
 HTLEFT = 10
@@ -32,30 +29,21 @@ WM_NCHITTEST = 0x0084
 WM_NCCALCSIZE = 0x0083
 WM_GETMINMAXINFO = 0x0024
 
-# DWM attributes
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20
 DWMWA_WINDOW_CORNER_PREFERENCE = 33
 DWMWA_SYSTEMBACKDROP_TYPE = 38
 
-# DWM backdrop types (Windows 11 22H2+, build 22621+)
 DWMSBT_MAINWINDOW = 2
 DWMSBT_TRANSIENTWINDOW = 3
 DWMSBT_TABBEDWINDOW = 4
 
-# Legacy Mica (early Win11 builds only, pre-22621)
 DWMWA_MICA_EFFECT_LEGACY = 1029
-
-# Corner preferences
 DWMWCP_ROUND = 2
 
 MONITOR_DEFAULTTONEAREST = 2
-
 IS_WINDOWS = sys.platform == "win32"
 
 
-# --------------------------------------------------
-# ctypes structures for WM_GETMINMAXINFO
-# --------------------------------------------------
 class POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
@@ -98,10 +86,6 @@ class NativeFramelessWindow(QMainWindow):
     3. WM_NCHITTEST: map regions to resize edges, title bar, and client.
     4. WM_GETMINMAXINFO: clamp maximize to current monitor work area.
     5. DWM provides drop shadow automatically.
-
-    The result: a window that looks frameless but behaves natively -- resize
-    cursors, Aero Snap, Win11 Snap Layouts, taskbar click to minimize, and
-    multi-monitor DPI transitions all work correctly.
     """
 
     RESIZE_BORDER = 6
@@ -114,15 +98,14 @@ class NativeFramelessWindow(QMainWindow):
         self.setMinimumSize(1100, 720)
         self.resize(1440, 900)
 
-        # Central container.
         self._central = QWidget()
         self._central.setObjectName("windowChromeRoot")
         self.setCentralWidget(self._central)
+
         self._layout = QVBoxLayout(self._central)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
-        # Title bar -- set by subclass via set_title_bar().
         self._title_bar: QWidget | None = None
 
     @classmethod
@@ -138,11 +121,20 @@ class NativeFramelessWindow(QMainWindow):
 
     def set_content(self, widget: QWidget) -> None:
         """Set the main content widget (below title bar)."""
-        while self._layout.count():
-            item = self._layout.takeAt(0)
+        keep_title_bar = (
+            self._title_bar is not None
+            and self._title_bar.parentWidget() is self._central
+            and self._layout.count() > 0
+            and self._layout.itemAt(0).widget() is self._title_bar
+        )
+        preserve_count = 1 if keep_title_bar else 0
+
+        while self._layout.count() > preserve_count:
+            item = self._layout.takeAt(preserve_count)
             child = item.widget()
             if child is not None:
                 child.setParent(None)
+
         self._layout.addWidget(widget, 1)
 
     def showEvent(self, event) -> None:
@@ -155,29 +147,39 @@ class NativeFramelessWindow(QMainWindow):
         if event.type() == QEvent.Type.WindowStateChange:
             self._on_window_state_changed()
 
-    # --------------------------------------------------
-    # Windows native event handling -- THE KEY METHOD
-    # --------------------------------------------------
     def nativeEvent(self, event_type: QByteArray, message: int) -> tuple[bool, int]:
         if not IS_WINDOWS or not self.supports_custom_shell():
             return super().nativeEvent(event_type, message)
 
+        if bytes(event_type) != b"windows_generic_MSG":
+            return False, 0
+
         msg = ctypes.wintypes.MSG.from_address(int(message))
 
-        if msg.message == WM_NCCALCSIZE:
-            if msg.wParam:
-                # Return 0: client area fills the entire window frame.
-                # DWM shadow is preserved because we never used FramelessWindowHint.
-                return True, 0
+        if msg.message == WM_NCCALCSIZE and msg.wParam:
+            return True, 0
 
         if msg.message == WM_NCHITTEST:
             return self._handle_nchittest(msg)
 
         if msg.message == WM_GETMINMAXINFO:
-            self._handle_getminmaxinfo(int(msg.hwnd), int(msg.lParam))
+            self._handle_getminmaxinfo(int(msg.hWnd), int(msg.lParam))
             return True, 0
 
-        return super().nativeEvent(event_type, message)
+        return False, 0
+
+    @staticmethod
+    def _title_bar_child_is_interactive(child: QWidget | None) -> bool:
+        current = child
+        while current is not None:
+            if isinstance(current, QAbstractButton):
+                return True
+            if bool(current.property("interactiveInTitleBar")):
+                return True
+            if current.focusPolicy() != Qt.FocusPolicy.NoFocus and current.isEnabled():
+                return True
+            current = current.parentWidget()
+        return False
 
     def _handle_nchittest(self, msg: ctypes.wintypes.MSG) -> tuple[bool, int]:
         """Map cursor position to window region."""
@@ -214,7 +216,7 @@ class NativeFramelessWindow(QMainWindow):
             if self._title_bar is not None:
                 title_pos = self._title_bar.mapFromGlobal(QPoint(x, y))
                 child = self._title_bar.childAt(title_pos)
-                if child is not None:
+                if self._title_bar_child_is_interactive(child):
                     return True, HTCLIENT
             return True, HTCAPTION
 
@@ -249,9 +251,6 @@ class NativeFramelessWindow(QMainWindow):
         minmax.ptMinTrackSize.x = max(minmax.ptMinTrackSize.x, self.minimumWidth())
         minmax.ptMinTrackSize.y = max(minmax.ptMinTrackSize.y, self.minimumHeight())
 
-    # --------------------------------------------------
-    # DWM effects
-    # --------------------------------------------------
     def _apply_dwm_effects(self) -> None:
         """Apply DWM visual effects. Non-fatal on failure."""
         try:

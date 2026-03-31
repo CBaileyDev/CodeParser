@@ -1,4 +1,4 @@
-"""theme_manager.py -- Three-mode theme manager with QPalette + semantic QSS."""
+"""theme_manager.py -- Theme manager with QPalette + semantic QSS."""
 
 from __future__ import annotations
 
@@ -82,17 +82,17 @@ LIGHT_TOKENS = ThemeTokens(
     bg_hover="#EAF0F8",
     text_primary="#15202B",
     text_secondary="#425466",
-    text_muted="#6B7A8C",
+    text_muted="#657487",
     text_on_accent="#FFFFFF",
-    accent="#2E6BFF",
-    accent_hover="#3F78FF",
-    accent_pressed="#245CE2",
+    accent="#255EDC",
+    accent_hover="#2E6BFF",
+    accent_pressed="#2156C8",
     success="#1F8F45",
     warning="#A86A00",
     danger="#C93A2F",
     border="#D5DEE8",
     border_strong="#B9C5D2",
-    focus_ring="rgba(46, 107, 255, 0.32)",
+    focus_ring="rgba(37, 94, 220, 0.32)",
     separator="rgba(0, 0, 0, 0.08)",
 )
 
@@ -151,6 +151,10 @@ def build_qss(tokens: ThemeTokens) -> str:
         border-radius: {radius_lg}px;
     }}
 
+    QFrame#appSurface[windowState="maximized"] {{
+        border-radius: 0px;
+    }}
+
     QFrame[surface="elevated"],
     QFrame#CodeParserInset {{
         background: {bg_elevated};
@@ -168,14 +172,23 @@ def build_qss(tokens: ThemeTokens) -> str:
         background: transparent;
     }}
 
-    QLabel#titleLabel,
+    QLabel#titleLabel {{
+        font-size: 14px;
+        font-weight: 700;
+        color: {text_primary};
+    }}
+
+    QLabel#titleSubtitle {{
+        font-size: 12px;
+        color: {text_muted};
+    }}
+
     QLabel#CodeParserTitle {{
         font-size: 24px;
         font-weight: 700;
         color: {text_primary};
     }}
 
-    QLabel#titleSubtitle,
     QLabel#CodeParserMetricLabel,
     QLabel[tone="muted"],
     QLabel#CodeParserEyebrow {{
@@ -219,6 +232,9 @@ def build_qss(tokens: ThemeTokens) -> str:
         border: none;
         border-radius: {radius_sm}px;
         background: transparent;
+        font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
     }}
 
     QToolButton#windowControlButton:hover {{
@@ -320,6 +336,11 @@ def build_qss(tokens: ThemeTokens) -> str:
         padding: 8px 10px;
     }}
 
+    QPlainTextEdit,
+    QTextEdit {{
+        font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
+    }}
+
     QLineEdit:focus,
     QPlainTextEdit:focus,
     QTextEdit:focus,
@@ -395,7 +416,40 @@ def build_qss(tokens: ThemeTokens) -> str:
         border-color: {border};
     }}
 
-    /* -- Scrollbars (thin, modern) -- */
+    QTabWidget#workbenchTabs::pane {{
+        border: none;
+        background: transparent;
+        padding: 0px;
+        margin-top: 8px;
+    }}
+
+    QTabWidget#workbenchTabs QTabBar {{
+        qproperty-drawBase: 0;
+    }}
+
+    QTabWidget#workbenchTabs QTabBar::tab {{
+        min-height: 36px;
+        padding: 0 16px;
+        margin: 0 8px 0 0;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        color: {text_secondary};
+        font-weight: 600;
+    }}
+
+    QTabWidget#workbenchTabs QTabBar::tab:hover:!selected {{
+        background: {bg_hover};
+        color: {text_primary};
+    }}
+
+    QTabWidget#workbenchTabs QTabBar::tab:selected {{
+        background: {bg_panel};
+        color: {text_primary};
+        border-color: {border_strong};
+    }}
+
+    /* -- Scrollbars -- */
     QScrollBar:vertical {{
         width: 10px;
         margin: 4px;
@@ -485,7 +539,7 @@ def build_qss(tokens: ThemeTokens) -> str:
 
 
 class ThemeManager(QObject):
-    """Three-mode theme manager: system / dark / light."""
+    """Theme manager supporting dark, light, and optional system-follow modes."""
 
     themeChanged = pyqtSignal(object)
 
@@ -495,11 +549,11 @@ class ThemeManager(QObject):
         self._settings = settings or QSettings()
         self._last_contrast_report: dict[str, float] = {}
 
-        raw = str(self._settings.value("theme/mode", ThemeMode.SYSTEM.value))
+        raw = str(self._settings.value("theme/mode", ThemeMode.DARK.value))
         self._mode = (
             ThemeMode(raw)
             if raw in ThemeMode._value2member_map_
-            else ThemeMode.SYSTEM
+            else ThemeMode.DARK
         )
 
         hints = QGuiApplication.styleHints()

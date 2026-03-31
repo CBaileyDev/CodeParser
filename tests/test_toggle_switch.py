@@ -32,3 +32,11 @@ def test_toggle_switch_mouse_release_toggles_value(qtbot) -> None:
     )
 
     assert switch.isChecked() is True
+
+
+def test_toggle_switch_theme_variant_uses_wider_control(qtbot) -> None:
+    switch = ToggleSwitch(theme_icons=True)
+    qtbot.addWidget(switch)
+
+    assert switch.width() == 64
+    assert switch.height() == 30

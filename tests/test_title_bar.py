@@ -19,18 +19,23 @@ def test_title_bar_updates_labels_and_drag_regions(qtbot) -> None:
     assert title_bar._subtitle.text() == "Repository intelligence packer"
     assert title_bar.is_draggable_point(title_bar._close_btn.geometry().center()) is False
     assert title_bar.is_draggable_point(QPoint(title_bar.width() // 2, title_bar.height() // 2)) is True
+    assert not hasattr(title_bar, "_max_btn")
 
-
-def test_title_bar_double_click_emits_maximize_restore(qtbot) -> None:
+def test_title_bar_double_click_does_not_emit_maximize_restore(qtbot) -> None:
     title_bar = TitleBar()
     qtbot.addWidget(title_bar)
     title_bar.resize(640, 40)
     title_bar.show()
 
-    with qtbot.waitSignal(title_bar.maximize_restore_requested, timeout=1_000):
-        QTest.mouseDClick(
-            title_bar,
-            Qt.MouseButton.LeftButton,
-            Qt.KeyboardModifier.NoModifier,
-            QPoint(title_bar.width() // 2, title_bar.height() // 2),
-        )
+    triggered: list[bool] = []
+    if hasattr(title_bar, "maximize_restore_requested"):
+        title_bar.maximize_restore_requested.connect(lambda: triggered.append(True))
+
+    QTest.mouseDClick(
+        title_bar,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QPoint(title_bar.width() // 2, title_bar.height() // 2),
+    )
+
+    assert triggered == []

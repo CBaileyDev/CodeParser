@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
         self,
         initial_target: str | None = None,
         *,
-        use_custom_shell: bool = False,
+        use_custom_shell: bool = True,
         theme_manager: ThemeManager | None = None,
     ) -> None:
         super().__init__()
@@ -102,9 +102,6 @@ class MainWindow(QMainWindow):
         # Backward-compatible attribute forwarding for tests/integration.
         self.target_edit = self.generate_tab.target_edit
         self.generate_btn = self.generate_tab.generate_btn
-        self.copy_btn = self.generate_tab.copy_btn
-        self.save_btn = self.generate_tab.save_btn
-        self.output_editor = self.generate_tab.output_editor
 
     def _sync_theme_mode_combo(self) -> None:
         index = self.theme_mode_combo.findData(self._theme_manager.mode)
@@ -133,10 +130,11 @@ def run_gui(
     initial_target: str | None = None,
     *,
     app: QApplication | None = None,
-    use_custom_shell: bool = False,
+    use_custom_shell: bool = True,
 ) -> int:
     qt_app = app or QApplication.instance() or QApplication([])
     theme_manager = ThemeManager(qt_app)
+    theme_manager.apply()
     window = create_workbench(
         theme_manager=theme_manager,
         initial_target=initial_target,
