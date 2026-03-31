@@ -1,24 +1,28 @@
 # CodeParser.spec
-# Minimal PyInstaller spec for building a single-file, windowed executable.
+# PyInstaller spec for building a single-file, windowed executable.
+
+import pathlib
+
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
+hiddenimports = [
+    "tiktoken",
+    "detect_secrets",
+    "detect_secrets.core.scan",
+    "tree_sitter",
+    "tree_sitter_languages",
+] + collect_submodules("detect_secrets")
+
 
 a = Analysis(
-    ['main.py'],
+    ["main.py"],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[
-        'tiktoken',
-        'detect_secrets',
-        'tree_sitter',
-        'tree_sitter_languages',
-        'tqdm',
-        'pathspec',
-        'PyQt6',
-    ],
-    hookspath=[],
+    hiddenimports=hiddenimports,
+    hookspath=["hooks"],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
@@ -31,7 +35,7 @@ exe = EXE(
     a.binaries,
     a.zipfiles,
     a.datas,
-    name='CodeParser',
+    name="CodeParser",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -42,5 +46,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=str(pathlib.Path("assets") / "codeparser.ico"),
 )

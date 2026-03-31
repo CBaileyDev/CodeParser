@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
+import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from codeparser.config import CodeParserConfig
@@ -14,6 +17,14 @@ def build_cli_parser() -> argparse.ArgumentParser:
         description="Pack a source tree into a Repomix-style XML file.",
     )
     parser.add_argument(
+        "target",
+        nargs="?",
+        help=(
+            "Optional GitHub repository URL (e.g., https://github.com/user/repo) "
+            "to shallow-clone and pack."
+        ),
+    )
+    parser.add_argument(
         "--cli",
         action="store_true",
         help="Run in headless CLI mode instead of starting the GUI.",
@@ -23,14 +34,17 @@ def build_cli_parser() -> argparse.ArgumentParser:
         "-p",
         type=str,
         default=None,
-        help="Root folder to pack (defaults to the current working directory).",
+        help="Local root folder to pack (defaults to the current working directory).",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=str,
         default=None,
-        help="Output XML file path (defaults to <root>/codeparser.xml).",
+        help=(
+            "Output XML file path (defaults to codeparser-[folder]-[date].xml in the "
+            "current directory)."
+        ),
     )
     parser.add_argument(
         "--compress",
@@ -66,12 +80,23 @@ def build_cli_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_cli(args: argparse.Namespace) -> None:
-    root = Path(args.path).resolve() if args.path else Path.cwd()
+def _is_github_url(value: str | None) -> bool:
+    if not value:
+        return False
+    return value.startswith("https://github.com/") or value.startswith("http://github.com/")
+
+
+def _default_output_path_for_root(root: Path) -> Path:
+    folder = root.name or "repo"
+    date_str = datetime.now().strftime("%Y%m%d")
+    return Path.cwd() / f"codeparser-{folder}-{date_str}.xml"
+
+
+def _run_for_root(args: argparse.Namespace, root: Path) -> None:
     output_path = (
         Path(args.output).resolve()
         if args.output
-        else root / "codeparser.xml"
+        else _default_output_path_for_root(root)
     )
 
     config = CodeParserConfig(
@@ -94,11 +119,39 @@ def run_cli(args: argparse.Namespace) -> None:
         print(f"[CodeParser] Potential secrets flagged: {stats.secrets_found}")
 
 
+def run_cli(args: argparse.Namespace) -> None:
+    # GitHub URL positional argument takes precedence over --path.
+    if _is_github_url(args.target):
+        with tempfile.TemporaryDirectory(prefix="codeparser-") as tmpdir:
+            clone_dir = Path(tmpdir) / "repo"
+            print(f"[CodeParser] Cloning {args.target} into {clone_dir} (shallow clone)...")
+            try:
+                subprocess.run(
+                    [
+                        "git",
+                        "clone",
+                        "--depth",
+                        "1",
+                        args.target,
+                        str(clone_dir),
+                    ],
+                    check=True,
+                )
+            except (OSError, subprocess.CalledProcessError) as exc:
+                print(f"[CodeParser] Failed to clone repository: {exc}")
+                return
+
+            _run_for_root(args, clone_dir)
+    else:
+        root = Path(args.path).resolve() if args.path else Path.cwd()
+        _run_for_root(args, root)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_cli_parser()
     args = parser.parse_args(argv)
 
-    if args.cli:
+    if args.cli or _is_github_url(args.target):
         run_cli(args)
     else:
         # Import PyQt6 GUI lazily so CLI users do not need a Qt-capable environment.

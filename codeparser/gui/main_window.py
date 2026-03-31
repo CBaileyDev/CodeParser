@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -30,11 +31,46 @@ from ..parser_core import generate_xml
 from .preset_manager import delete_preset, list_preset_names, load_preset, save_preset
 
 
+DARK_STYLESHEET = """
+QWidget {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+QLineEdit, QPlainTextEdit, QComboBox {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #444444;
+}
+
+QPushButton {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border: 1px solid #555555;
+    padding: 4px 10px;
+}
+
+QPushButton:hover {
+    background-color: #3c3c3c;
+}
+
+QProgressBar {
+    background-color: #1e1e1e;
+    border: 1px solid #444444;
+}
+
+QProgressBar::chunk {
+    background-color: #3f51b5;
+}
+"""
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("CodeParser")
         self.resize(1100, 720)
+        self.setAcceptDrops(True)
 
         self._build_ui()
         self._refresh_presets()
@@ -76,6 +112,10 @@ class MainWindow(QMainWindow):
         self.delete_preset_btn = QPushButton("Delete")
         self.delete_preset_btn.clicked.connect(self._on_delete_preset)
         preset_row.addWidget(self.delete_preset_btn)
+
+        self.dark_mode_cb = QCheckBox("Dark theme")
+        self.dark_mode_cb.stateChanged.connect(self._on_dark_mode_toggled)
+        preset_row.addWidget(self.dark_mode_cb)
 
         layout.addLayout(preset_row)
 
@@ -159,6 +199,31 @@ class MainWindow(QMainWindow):
             cb.stateChanged.connect(self._update_token_preview)
 
     # ------------------------------------------------------------------
+    # Drag-and-drop support
+    # ------------------------------------------------------------------
+    def dragEnterEvent(self, event):  # type: ignore[override]
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls:
+                local_path = urls[0].toLocalFile()
+                if Path(local_path).is_dir():
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+
+    def dropEvent(self, event):  # type: ignore[override]
+        urls = event.mimeData().urls()
+        if not urls:
+            event.ignore()
+            return
+        local_path = urls[0].toLocalFile()
+        if Path(local_path).is_dir():
+            self.folder_edit.setText(local_path)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    # ------------------------------------------------------------------
     # Configuration helpers
     # ------------------------------------------------------------------
     def _build_config(self, preview: bool = False) -> CodeParserConfig:
@@ -218,6 +283,18 @@ class MainWindow(QMainWindow):
             return
         delete_preset(name)
         self._refresh_presets()
+
+    # ------------------------------------------------------------------
+    # Theme toggle
+    # ------------------------------------------------------------------
+    def _on_dark_mode_toggled(self) -> None:
+        app = QApplication.instance()
+        if not app:
+            return
+        if self.dark_mode_cb.isChecked():
+            app.setStyleSheet(DARK_STYLESHEET)
+        else:
+            app.setStyleSheet("")
 
     # ------------------------------------------------------------------
     # Actions
@@ -293,10 +370,9 @@ class MainWindow(QMainWindow):
         xml = self.output_editor.toPlainText()
         if not xml:
             return
-        suggested = (
-            Path(self.folder_edit.text() or ".").expanduser().resolve()
-            / "codeparser.xml"
-        )
+        root = Path(self.folder_edit.text() or ".").expanduser().resolve()
+        date_str = datetime.now().strftime("%Y%m%d")
+        suggested = root / f"codeparser-{root.name}-{date_str}.xml"
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Save XML As",
