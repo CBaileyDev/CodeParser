@@ -3,16 +3,41 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 
 
-def test_main_window_uses_dark_theme_by_default(qtbot) -> None:
+def test_main_window_uses_theme_selector_with_system_default(qtbot, tmp_path) -> None:
     module = importlib.import_module("codeparser.gui.main_window")
-    window = module.MainWindow()
+    bootstrap_module = importlib.import_module("codeparser_ui.bootstrap")
+    theme_module = importlib.import_module("codeparser_ui.theme_manager")
+
+    settings = QSettings(str(tmp_path / "theme.ini"), QSettings.Format.IniFormat)
+    app = QApplication.instance() or bootstrap_module.create_application([])
+    theme_manager = theme_module.ThemeManager(app, settings=settings)
+    window = module.MainWindow(theme_manager=theme_manager)
     qtbot.addWidget(window)
 
-    assert window.dark_mode_cb.isChecked() is True
+    assert window.theme_mode_combo.count() == 3
+    assert window.theme_mode_combo.currentData() == theme_module.ThemeMode.SYSTEM
     assert module.QApplication.instance().styleSheet().strip()
+
+
+def test_main_window_theme_selector_updates_manager_mode(qtbot, tmp_path) -> None:
+    module = importlib.import_module("codeparser.gui.main_window")
+    bootstrap_module = importlib.import_module("codeparser_ui.bootstrap")
+    theme_module = importlib.import_module("codeparser_ui.theme_manager")
+
+    settings = QSettings(str(tmp_path / "theme.ini"), QSettings.Format.IniFormat)
+    app = QApplication.instance() or bootstrap_module.create_application([])
+    theme_manager = theme_module.ThemeManager(app, settings=settings)
+    window = module.MainWindow(theme_manager=theme_manager)
+    qtbot.addWidget(window)
+
+    index = window.theme_mode_combo.findData(theme_module.ThemeMode.DARK)
+    window.theme_mode_combo.setCurrentIndex(index)
+
+    assert theme_manager.mode == theme_module.ThemeMode.DARK
 
 
 def test_main_window_starts_with_generate_tab_ready_state(qtbot) -> None:
@@ -105,3 +130,48 @@ def test_generate_tab_keeps_cached_remote_target_alive_during_generation(
     tab.close()
     QApplication.processEvents()
     assert fake_target.cleanup_calls == 1
+
+
+def test_generate_tab_runs_generation_without_process_events(
+    qtbot,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import time
+
+    module = importlib.import_module("codeparser.gui.generate_tab")
+    parser_module = importlib.import_module("codeparser.parser_core")
+    worker_module = importlib.import_module("codeparser_ui.workers.generate_worker")
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "main.py").write_text("print('ok')\n", encoding="utf-8")
+
+    calls: list[str] = []
+    original_process_events = module.QApplication.processEvents
+
+    def record_process_events(*args, **kwargs):
+        calls.append("processEvents")
+        return original_process_events(*args, **kwargs)
+
+    def fake_generate_xml(_config, use_tqdm: bool = False, preview: bool = False):
+        time.sleep(0.05)
+        return "<file_summary />", parser_module.GenerationStats(total_files=1)
+
+    monkeypatch.setattr(module.QApplication, "processEvents", record_process_events)
+    monkeypatch.setattr(worker_module, "generate_xml", fake_generate_xml)
+
+    tab = module.GenerateTab(initial_target=str(root), auto_refresh_preview=False)
+    qtbot.addWidget(tab)
+
+    try:
+        tab._on_generate()
+    finally:
+        monkeypatch.setattr(module.QApplication, "processEvents", original_process_events)
+
+    assert calls == []
+    assert tab.generate_btn.isEnabled() is False
+    qtbot.waitUntil(lambda: tab.output_editor.toPlainText() == "<file_summary />", timeout=3_000)
+    assert tab.copy_btn.isEnabled() is True
+    assert tab.save_btn.isEnabled() is True
+    assert "Generated XML for 1 files." in tab.status_label.text()

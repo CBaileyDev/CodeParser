@@ -24,6 +24,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from codeparser_ui.workers.generate_worker import (
+    GenerateController,
+    GenerateRequest,
+    GenerateResult,
+    ParserCoreGenerateEngine,
+)
+
 from ..config import CodeParserConfig, apply_preset_to_config
 from ..parser_core import GenerationStats, generate_xml
 from ..remote import RemoteResolutionError, ResolvedTarget, is_github_url, resolve_target
@@ -49,6 +56,11 @@ class GenerateTab(QWidget):
         self._cached_remote_url: str | None = None
         self._auto_refresh_preview = auto_refresh_preview
         self._last_output_path: Path | None = None
+        self._active_generation_target: ResolvedTarget | None = None
+        self._generate_controller = GenerateController(
+            ParserCoreGenerateEngine(),
+            self,
+        )
 
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
@@ -58,6 +70,9 @@ class GenerateTab(QWidget):
         self._build_ui(initial_target or "")
         self._refresh_presets()
         self._sync_ready_state()
+        self._generate_controller.busy_changed.connect(self._set_busy)
+        self._generate_controller.result_ready.connect(self._on_generation_finished)
+        self._generate_controller.error_raised.connect(self._on_generation_failed)
 
     # ------------------------------------------------------------------
     # UI
@@ -69,6 +84,7 @@ class GenerateTab(QWidget):
 
         hero = QFrame(self)
         hero.setObjectName("CodeParserPanel")
+        hero.setProperty("surface", "panel")
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(18, 18, 18, 18)
         hero_layout.setSpacing(12)
@@ -87,6 +103,7 @@ class GenerateTab(QWidget):
             hero,
         )
         body.setObjectName("CodeParserBody")
+        body.setProperty("tone", "secondary")
         body.setWordWrap(True)
         hero_layout.addWidget(body)
 
@@ -100,6 +117,7 @@ class GenerateTab(QWidget):
         target_row.addWidget(self.target_edit, 1)
 
         self.browse_btn = QPushButton("Browse...")
+        self.browse_btn.setProperty("variant", "toolbar")
         self.browse_btn.clicked.connect(self._on_browse)
         target_row.addWidget(self.browse_btn)
         hero_layout.addLayout(target_row)
@@ -112,11 +130,12 @@ class GenerateTab(QWidget):
             hero,
         )
         self.target_hint.setObjectName("CodeParserBody")
+        self.target_hint.setProperty("tone", "secondary")
         self.target_hint.setWordWrap(True)
         hint_row.addWidget(self.target_hint, 1)
 
         self.generate_btn = QPushButton("Generate XML")
-        self.generate_btn.setObjectName("CodeParserPrimaryButton")
+        self.generate_btn.setProperty("variant", "primary")
         self.generate_btn.clicked.connect(self._on_generate)
         hint_row.addWidget(self.generate_btn)
         hero_layout.addLayout(hint_row)
@@ -125,6 +144,7 @@ class GenerateTab(QWidget):
 
         controls_surface = QFrame(self)
         controls_surface.setObjectName("CodeParserSurface")
+        controls_surface.setProperty("surface", "panel")
         controls_layout = QGridLayout(controls_surface)
         controls_layout.setContentsMargins(18, 18, 18, 18)
         controls_layout.setHorizontalSpacing(14)
@@ -132,6 +152,7 @@ class GenerateTab(QWidget):
 
         preset_panel = QFrame(controls_surface)
         preset_panel.setObjectName("CodeParserInset")
+        preset_panel.setProperty("surface", "elevated")
         preset_layout = QVBoxLayout(preset_panel)
         preset_layout.setContentsMargins(14, 14, 14, 14)
         preset_layout.setSpacing(8)
@@ -147,10 +168,12 @@ class GenerateTab(QWidget):
         preset_row.addWidget(self.preset_combo, 1)
 
         self.save_preset_btn = QPushButton("Save")
+        self.save_preset_btn.setProperty("variant", "toolbar")
         self.save_preset_btn.clicked.connect(self._on_save_preset)
         preset_row.addWidget(self.save_preset_btn)
 
         self.delete_preset_btn = QPushButton("Delete")
+        self.delete_preset_btn.setProperty("variant", "danger")
         self.delete_preset_btn.clicked.connect(self._on_delete_preset)
         preset_row.addWidget(self.delete_preset_btn)
         preset_layout.addLayout(preset_row)
@@ -160,6 +183,7 @@ class GenerateTab(QWidget):
             preset_panel,
         )
         preset_hint.setObjectName("CodeParserBody")
+        preset_hint.setProperty("tone", "secondary")
         preset_hint.setWordWrap(True)
         preset_layout.addWidget(preset_hint)
 
@@ -167,6 +191,7 @@ class GenerateTab(QWidget):
 
         options_panel = QFrame(controls_surface)
         options_panel.setObjectName("CodeParserInset")
+        options_panel.setProperty("surface", "elevated")
         options_layout = QVBoxLayout(options_panel)
         options_layout.setContentsMargins(14, 14, 14, 14)
         options_layout.setSpacing(10)
@@ -202,6 +227,7 @@ class GenerateTab(QWidget):
 
         preview_panel = QFrame(controls_surface)
         preview_panel.setObjectName("CodeParserInset")
+        preview_panel.setProperty("surface", "elevated")
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(14, 14, 14, 14)
         preview_layout.setSpacing(8)
@@ -222,6 +248,7 @@ class GenerateTab(QWidget):
             preview_panel,
         )
         self.preview_detail_label.setObjectName("CodeParserBody")
+        self.preview_detail_label.setProperty("tone", "secondary")
         self.preview_detail_label.setWordWrap(True)
         preview_layout.addWidget(self.preview_detail_label)
 
@@ -230,6 +257,7 @@ class GenerateTab(QWidget):
 
         output_surface = QFrame(self)
         output_surface.setObjectName("CodeParserSurface")
+        output_surface.setProperty("surface", "panel")
         output_layout = QVBoxLayout(output_surface)
         output_layout.setContentsMargins(18, 18, 18, 18)
         output_layout.setSpacing(10)
@@ -250,11 +278,13 @@ class GenerateTab(QWidget):
         output_header.addLayout(output_title_wrap, 1)
 
         self.copy_btn = QPushButton("Copy XML")
+        self.copy_btn.setProperty("variant", "toolbar")
         self.copy_btn.clicked.connect(self._on_copy_xml)
         self.copy_btn.setEnabled(False)
         output_header.addWidget(self.copy_btn)
 
         self.save_btn = QPushButton("Save As...")
+        self.save_btn.setProperty("variant", "toolbar")
         self.save_btn.clicked.connect(self._on_save_xml)
         self.save_btn.setEnabled(False)
         output_header.addWidget(self.save_btn)
@@ -266,6 +296,7 @@ class GenerateTab(QWidget):
             output_surface,
         )
         self.status_label.setObjectName("CodeParserBody")
+        self.status_label.setProperty("tone", "secondary")
         self.status_label.setWordWrap(True)
         output_layout.addWidget(self.status_label)
 
@@ -540,32 +571,66 @@ class GenerateTab(QWidget):
         finally:
             self._cleanup_resolved_target(resolved)
 
+    def _build_generate_request(self) -> tuple[GenerateRequest, ResolvedTarget]:
+        config, resolved = self._build_config(preview=False)
+        request = GenerateRequest(
+            source_path=str(config.root_path),
+            include_hidden=False,
+            include_comments=not config.remove_comments,
+            count_tokens=config.count_tokens,
+            run_secret_scan=config.secret_scan,
+            use_tree_sitter=config.compress,
+            config=config,
+            use_tqdm=False,
+            preview=False,
+        )
+        return request, resolved
+
+    def _cleanup_active_generation_target(self) -> None:
+        if self._active_generation_target is None:
+            return
+        self._cleanup_resolved_target(self._active_generation_target)
+        self._active_generation_target = None
+
     def _on_generate(self) -> None:
         if not self._has_target():
             self.status_label.setText("Choose a folder or GitHub repository before generating.")
             return
-        self._set_busy(True)
-        self.status_label.setText("Generating packed XML...")
-        QApplication.processEvents()
+        if self._generate_controller.busy:
+            self.status_label.setText("Generation is already in progress.")
+            return
 
+        resolved: ResolvedTarget | None = None
         try:
-            xml_text, stats = self._generate_xml()
+            request, resolved = self._build_generate_request()
         except RemoteResolutionError as exc:  # pragma: no cover - GUI only
-            self._set_busy(False)
+            if resolved is not None:
+                self._cleanup_resolved_target(resolved)
             QMessageBox.critical(self, "Error", f"Generation failed:\n{exc}")
             self.status_label.setText("Generation failed.")
             return
         except Exception as exc:  # pragma: no cover - GUI only
-            self._set_busy(False)
+            if resolved is not None:
+                self._cleanup_resolved_target(resolved)
             QMessageBox.critical(self, "Error", f"Generation failed:\n{exc}")
             self.status_label.setText("Generation failed.")
             return
 
-        self._set_busy(False)
+        self.status_label.setText("Generating packed XML...")
+        if not self._generate_controller.submit(request):
+            self._cleanup_resolved_target(resolved)
+            self.status_label.setText("Generation is already in progress.")
+            return
+
+        self._active_generation_target = resolved
+
+    def _on_generation_finished(self, result: GenerateResult) -> None:
+        self._cleanup_active_generation_target()
         self.copy_btn.setEnabled(True)
         self.save_btn.setEnabled(True)
-        self.output_editor.setPlainText(xml_text)
+        self.output_editor.setPlainText(result.xml_text)
 
+        stats = result.stats
         summary = f"Generated XML for {stats.total_files} files."
         if stats.total_tokens is not None:
             summary += f" Tokens: {stats.total_tokens}."
@@ -574,6 +639,11 @@ class GenerateTab(QWidget):
         if self.compress_cb.isChecked() and not is_advanced_compression_available():
             summary += " Tree-sitter compression was unavailable, so CodeParser kept the original source."
         self.status_label.setText(summary)
+
+    def _on_generation_failed(self, summary: str, _trace: str) -> None:
+        self._cleanup_active_generation_target()
+        QMessageBox.critical(self, "Error", f"Generation failed:\n{summary}")
+        self.status_label.setText("Generation failed.")
 
     def _on_copy_xml(self) -> None:
         xml = self.output_editor.toPlainText()
@@ -611,5 +681,12 @@ class GenerateTab(QWidget):
         self.status_label.setText(f"Saved XML to {output_path}.")
 
     def closeEvent(self, event):  # type: ignore[override]
+        if self._generate_controller.busy:
+            self.status_label.setText(
+                "Generation is still in progress. Wait for it to finish before closing."
+            )
+            event.ignore()
+            return
+        self._cleanup_active_generation_target()
         self._release_cached_remote_target()
         super().closeEvent(event)

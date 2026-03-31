@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import QSignalBlocker
 from PyQt6.QtWidgets import (
     QApplication,
-    QCheckBox,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -11,20 +12,35 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from . import BuildTab, apply_codeparser_dark_theme
+from codeparser_ui.theme_manager import ThemeManager, ThemeMode
+from codeparser_ui.workbench import create_workbench
+
+from .build_tab import BuildTab
 from .generate_tab import GenerateTab
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, initial_target: str | None = None) -> None:
+    def __init__(
+        self,
+        initial_target: str | None = None,
+        *,
+        use_custom_shell: bool = False,
+        theme_manager: ThemeManager | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("CodeParser")
         self.resize(1180, 820)
         self.setAcceptDrops(True)
+        self.use_custom_shell = use_custom_shell
+        app = QApplication.instance()
+        if app is None:
+            raise RuntimeError("MainWindow requires an existing QApplication instance.")
+        self._theme_manager = theme_manager or ThemeManager(app)
 
         self._build_ui(initial_target or "")
-        self.dark_mode_cb.setChecked(True)
-        self._on_dark_mode_toggled()
+        self._theme_manager.themeChanged.connect(self._on_theme_changed)
+        self._sync_theme_mode_combo()
+        self._theme_manager.apply()
 
     def _build_ui(self, initial_target: str) -> None:
         root = QWidget(self)
@@ -55,14 +71,23 @@ class MainWindow(QMainWindow):
             header,
         )
         subtitle.setObjectName("CodeParserBody")
+        subtitle.setProperty("tone", "secondary")
         subtitle.setWordWrap(True)
         title_wrap.addWidget(subtitle)
 
         header_layout.addLayout(title_wrap, 1)
 
-        self.dark_mode_cb = QCheckBox("Dark theme")
-        self.dark_mode_cb.stateChanged.connect(self._on_dark_mode_toggled)
-        header_layout.addWidget(self.dark_mode_cb)
+        theme_label = QLabel("Theme", header)
+        theme_label.setProperty("tone", "muted")
+        header_layout.addWidget(theme_label)
+
+        self.theme_mode_combo = QComboBox(header)
+        self.theme_mode_combo.setAccessibleName("Theme mode")
+        self.theme_mode_combo.addItem("System", ThemeMode.SYSTEM)
+        self.theme_mode_combo.addItem("Dark", ThemeMode.DARK)
+        self.theme_mode_combo.addItem("Light", ThemeMode.LIGHT)
+        self.theme_mode_combo.currentIndexChanged.connect(self._on_theme_mode_changed)
+        header_layout.addWidget(self.theme_mode_combo)
 
         layout.addWidget(header)
 
@@ -81,14 +106,21 @@ class MainWindow(QMainWindow):
         self.save_btn = self.generate_tab.save_btn
         self.output_editor = self.generate_tab.output_editor
 
-    def _on_dark_mode_toggled(self) -> None:
-        app = QApplication.instance()
-        if not app:
+    def _sync_theme_mode_combo(self) -> None:
+        index = self.theme_mode_combo.findData(self._theme_manager.mode)
+        if index < 0:
             return
-        if self.dark_mode_cb.isChecked():
-            apply_codeparser_dark_theme(app)
-        else:
-            app.setStyleSheet("")
+        blocker = QSignalBlocker(self.theme_mode_combo)
+        self.theme_mode_combo.setCurrentIndex(index)
+        del blocker
+
+    def _on_theme_mode_changed(self, _index: int) -> None:
+        mode = self.theme_mode_combo.currentData()
+        if isinstance(mode, ThemeMode):
+            self._theme_manager.set_mode(mode)
+
+    def _on_theme_changed(self, _tokens: object) -> None:
+        self._sync_theme_mode_combo()
 
     def dragEnterEvent(self, event):  # type: ignore[override]
         self.generate_tab.dragEnterEvent(event)
@@ -97,8 +129,18 @@ class MainWindow(QMainWindow):
         self.generate_tab.dropEvent(event)
 
 
-def run_gui(initial_target: str | None = None) -> None:
-    app = QApplication.instance() or QApplication([])
-    window = MainWindow(initial_target=initial_target)
+def run_gui(
+    initial_target: str | None = None,
+    *,
+    app: QApplication | None = None,
+    use_custom_shell: bool = False,
+) -> int:
+    qt_app = app or QApplication.instance() or QApplication([])
+    theme_manager = ThemeManager(qt_app)
+    window = create_workbench(
+        theme_manager=theme_manager,
+        initial_target=initial_target,
+        use_custom_shell=use_custom_shell,
+    )
     window.show()
-    app.exec()
+    return qt_app.exec()

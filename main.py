@@ -202,10 +202,16 @@ def main(argv: list[str] | None = None) -> None:
         run_cli(args)
     else:
         # Import PyQt6 GUI lazily so CLI users do not need a Qt-capable environment.
+        from codeparser_ui.bootstrap import create_application, get_use_custom_shell
         from codeparser.gui.main_window import run_gui
 
         _hide_console_window()
-        run_gui(initial_target=args.path)
+        app = create_application(argv or [])
+        run_gui(
+            initial_target=args.path,
+            app=app,
+            use_custom_shell=get_use_custom_shell(),
+        )
 
 
 if __name__ == "__main__":

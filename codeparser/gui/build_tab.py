@@ -26,6 +26,7 @@ class BuildTab(QWidget):
 
         hero = QFrame(self)
         hero.setObjectName("CodeParserPanel")
+        hero.setProperty("surface", "panel")
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(18, 18, 18, 18)
         hero_layout.setSpacing(8)
@@ -47,6 +48,7 @@ class BuildTab(QWidget):
             hero,
         )
         self.placeholder_body.setObjectName("CodeParserBody")
+        self.placeholder_body.setProperty("tone", "secondary")
         self.placeholder_body.setWordWrap(True)
         self.placeholder_body.setTextFormat(Qt.TextFormat.PlainText)
         hero_layout.addWidget(self.placeholder_body)
@@ -55,6 +57,7 @@ class BuildTab(QWidget):
 
         surface = QFrame(self)
         surface.setObjectName("CodeParserSurface")
+        surface.setProperty("surface", "panel")
         surface_layout = QVBoxLayout(surface)
         surface_layout.setContentsMargins(18, 18, 18, 18)
         surface_layout.setSpacing(12)
@@ -76,6 +79,7 @@ class BuildTab(QWidget):
 
         folder_group = QFrame(surface)
         folder_group.setObjectName("CodeParserInset")
+        folder_group.setProperty("surface", "elevated")
         folder_layout = QVBoxLayout(folder_group)
         folder_layout.setContentsMargins(14, 14, 14, 14)
         folder_layout.setSpacing(6)
@@ -93,6 +97,7 @@ class BuildTab(QWidget):
 
         action_group = QFrame(surface)
         action_group.setObjectName("CodeParserInset")
+        action_group.setProperty("surface", "elevated")
         action_layout = QVBoxLayout(action_group)
         action_layout.setContentsMargins(14, 14, 14, 14)
         action_layout.setSpacing(8)
@@ -102,6 +107,7 @@ class BuildTab(QWidget):
         action_layout.addWidget(action_label)
 
         self.build_button = QPushButton("Rebuild files", action_group)
+        self.build_button.setProperty("variant", "primary")
         self.build_button.setEnabled(False)
         action_layout.addWidget(self.build_button)
 
@@ -110,6 +116,7 @@ class BuildTab(QWidget):
             action_group,
         )
         hint.setObjectName("CodeParserBody")
+        hint.setProperty("tone", "secondary")
         hint.setWordWrap(True)
         action_layout.addWidget(hint)
 
