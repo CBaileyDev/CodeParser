@@ -1,0 +1,32 @@
+# Additional ignore patterns for CodeParser
+# Uses the same syntax as .gitignore
+
+# Large binary assets
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.ico
+*.svg
+*.mp3
+*.wav
+*.mp4
+*.avi
+*.mkv
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Common build / cache directories
+.idea/
+.vscode/
+.cache/
+.mypy_cache/
+
+# Example: ignore generated docs
+# docs/_build/
