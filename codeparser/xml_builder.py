@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 def _format_notes(stats: GenerationStats) -> str:
     lines: List[str] = [
         "- Some files may have been excluded based on .gitignore, .codeparserignore, and CodeParser's configuration",
-        "- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files",
+        "- Binary files are not included in this packed representation. Please refer to the Repository Structure section for the included file paths.",
         "- Files matching patterns in .gitignore are excluded",
         "- Files matching patterns in .codeparserignore are excluded",
         "- Files matching default ignore patterns are excluded",

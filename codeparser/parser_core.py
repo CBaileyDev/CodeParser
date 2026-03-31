@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - exercised when tqdm is absent
+    def tqdm(iterable, **_kwargs):
+        return iterable
 
 from .config import CodeParserConfig
 from .ignore_rules import build_ignore_spec, iter_included_files, is_binary_file
@@ -153,6 +157,13 @@ def generate_xml(
     max_files = 40 if preview or config.preview_mode else None
 
     all_files = list(iter_included_files(config.root_path, ignore_spec))
+    output_path = config.output_path.resolve() if config.output_path else None
+    if output_path is not None:
+        all_files = [
+            (path, rel_path)
+            for path, rel_path in all_files
+            if path.resolve() != output_path
+        ]
     if max_files is not None:
         all_files = all_files[: max_files]
 

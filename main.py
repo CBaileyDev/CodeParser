@@ -103,6 +103,7 @@ def _run_for_root(args: argparse.Namespace, root: Path) -> None:
 
         config = CodeParserConfig(
             root_path=resolved.root_path,
+            output_path=output_path,
             display_name=resolved.display_name,
             compress=args.compress,
             remove_comments=args.remove_comments,
@@ -143,6 +144,7 @@ def _run_for_target(args: argparse.Namespace, target: str | Path | None) -> None
 
         config = CodeParserConfig(
             root_path=resolved.root_path,
+            output_path=output_path,
             display_name=resolved.display_name,
             compress=args.compress,
             remove_comments=args.remove_comments,
@@ -203,7 +205,7 @@ def main(argv: list[str] | None = None) -> None:
         from codeparser.gui.main_window import run_gui
 
         _hide_console_window()
-        run_gui(initial_target=args.path or str(Path.cwd()))
+        run_gui(initial_target=args.path)
 
 
 if __name__ == "__main__":

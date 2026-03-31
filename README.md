@@ -5,7 +5,7 @@ CodeParser is a Windows-first repository packer that turns a local folder or Git
 ## Features
 
 - Repomix-style XML output with `<file_summary>`, `<user_provided_header>`, `<directory_structure>`, `<files>`, and optional `<git_logs>`.
-- Double-click friendly GUI that starts in dark mode, previews the current folder, and auto-saves a default XML file on launch.
+- Double-click friendly GUI that starts in dark mode in a clean ready-to-pack state.
 - Drag-and-drop folder support plus direct GitHub URL support in both GUI and CLI.
 - Ignore handling for `.gitignore`, `.codeparserignore`, and built-in defaults.
 - Token counting with `tiktoken`.
@@ -16,11 +16,11 @@ CodeParser is a Windows-first repository packer that turns a local folder or Git
 ## GUI Usage
 
 1. Launch `CodeParser.exe` or run `python main.py`.
-2. On startup, CodeParser opens the GUI, scans the current folder, and auto-saves a default XML file named like `codeparser-my-project-20260331.xml`.
+2. On startup, CodeParser opens the GUI in a neutral ready-to-pack state.
 3. Use the `Target` field to choose a local folder or paste a GitHub repository URL such as `https://github.com/user/repo`.
 4. Drag a folder onto the window if you want to switch targets quickly.
 5. Toggle options such as `Compress code`, `Remove comments`, `Secret scan`, `Count tokens`, and `Include git history`.
-6. Review the live token preview and generated XML, then use `Copy XML` or `Save As...` if you want another output path.
+6. Click `Generate XML`, review the live preview and generated XML, then use `Copy XML` or `Save As...`.
 
 ## CLI Usage
 
@@ -60,7 +60,7 @@ Core install on Python 3.12-3.14:
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -79,11 +79,16 @@ python main.py
 Build the Windows executable:
 
 ```powershell
-pip install pyinstaller
-pyinstaller --clean --noconfirm CodeParser.spec
+.\build_exe.bat
 ```
 
-The executable is written to `dist/CodeParser.exe`.
+Build with optional Tree-sitter compression extras when available:
+
+```powershell
+.\build_exe_advanced.bat
+```
+
+Both scripts install the needed packaging tools, run the test suite, and write the executable to `dist/CodeParser.exe`.
 
 ## Comparison to Repomix
 
