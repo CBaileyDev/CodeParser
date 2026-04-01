@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtTest import QTest
 
@@ -39,3 +41,16 @@ def test_title_bar_double_click_does_not_emit_maximize_restore(qtbot) -> None:
     )
 
     assert triggered == []
+
+
+def test_title_bar_renders_app_icon_when_available(qtbot) -> None:
+    bootstrap_module = importlib.import_module("codeparser_ui.bootstrap")
+
+    app = bootstrap_module.create_application([])
+    title_bar = TitleBar()
+    qtbot.addWidget(title_bar)
+    title_bar.show()
+
+    assert app.windowIcon().isNull() is False
+    assert title_bar._icon_label.pixmap() is not None
+    assert title_bar._icon_label.pixmap().isNull() is False

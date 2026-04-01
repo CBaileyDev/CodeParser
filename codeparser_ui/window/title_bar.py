@@ -7,10 +7,13 @@ startSystemMove() is added as a Wayland/macOS fallback.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QIcon, QMouseEvent
 from PyQt6.QtWidgets import (
     QAbstractButton,
+    QApplication,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
@@ -33,8 +36,18 @@ class TitleBar(QWidget):
 
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(12, 0, 8, 0)
-        self._layout.setSpacing(4)
+        self._layout.setSpacing(6)
         self._trailing_widget: QWidget | None = None
+
+        self._icon_label = QLabel(self)
+        self._icon_label.setObjectName("titleIconBadge")
+        self._icon_label.setAccessibleName("Application icon")
+        self._icon_label.setFixedSize(20, 20)
+        self._icon_label.setScaledContents(True)
+        icon = self._resolve_app_icon()
+        if not icon.isNull():
+            self._icon_label.setPixmap(icon.pixmap(16, 16))
+        self._layout.addWidget(self._icon_label)
 
         self._title = QLabel("CodeParser", self)
         self._title.setObjectName("titleLabel")
@@ -108,6 +121,16 @@ class TitleBar(QWidget):
                 event.accept()
                 return
         super().mousePressEvent(event)
+
+    def _resolve_app_icon(self) -> QIcon:
+        app = QApplication.instance()
+        if app is not None:
+            icon = app.windowIcon()
+            if not icon.isNull():
+                return icon
+
+        icon_path = Path(__file__).resolve().parents[2] / "assets" / "codeparser.ico"
+        return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
 
     def _make_button(
         self,

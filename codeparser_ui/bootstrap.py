@@ -7,7 +7,7 @@ import sys
 from typing import Sequence
 
 from PyQt6.QtCore import QCoreApplication, QSettings, Qt
-from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QApplication
 
 USE_CUSTOM_SHELL_KEY = "window/use_custom_shell"
@@ -84,6 +84,20 @@ def create_application(argv: Sequence[str]) -> QApplication:
     app = QApplication.instance()
     if app is None:
         app = QApplication(list(argv))
+
+    import os
+    from pathlib import Path as _Path
+    # Try relative to this file first (development), then fall back to sys._MEIPASS (PyInstaller)
+    _here = _Path(__file__).resolve().parent.parent  # gives project root (codeparser_ui/../)
+    icon_path = str(_here / "assets" / "codeparser.ico")
+    if not os.path.exists(icon_path):
+        # PyInstaller bundle: _MEIPASS is the temp extraction folder
+        import sys
+        _meipass = getattr(sys, "_MEIPASS", None)
+        if _meipass:
+            icon_path = os.path.join(_meipass, "assets", "codeparser.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     app.setStyle("Fusion")
     app.setQuitOnLastWindowClosed(True)

@@ -32,7 +32,10 @@ def test_theme_manager_applies_dark_tokens_to_palette_and_stylesheet(tmp_path) -
     assert app.palette().color(QPalette.ColorRole.Window) == QColor(tokens.bg_window)
     assert app.palette().color(QPalette.ColorRole.Highlight) == QColor(tokens.accent)
     assert 'QFrame#appSurface' in app.styleSheet()
+    assert 'QFrame#CodeParserSurface[depth="raised"]' in app.styleSheet()
+    assert 'QCheckBox::indicator' in app.styleSheet()
     assert 'QPushButton[variant="primary"]' in app.styleSheet()
+    assert 'QPushButton[variant="primary"][emphasis="hero"]' in app.styleSheet()
     assert 'QTabWidget#workbenchTabs QTabBar::tab:selected' in app.styleSheet()
 
 

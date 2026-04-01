@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSettings, QSignalBlocker, Qt
-from PyQt6.QtGui import QGuiApplication, QKeySequence, QShortcut
+from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
+    QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QInputDialog,
     QTabWidget,
@@ -77,6 +79,7 @@ class _WorkbenchContent(QWidget):
         self._install_shortcuts()
         self._install_accessibility()
         self._sync_theme_controls()
+        self._apply_surface_depth()
 
     @property
     def theme_widget(self) -> QWidget:
@@ -189,6 +192,33 @@ class _WorkbenchContent(QWidget):
 
     def _on_theme_changed(self, _tokens: object) -> None:
         self._sync_theme_controls()
+        self._apply_surface_depth()
+
+    def _apply_surface_depth(self) -> None:
+        for frame in self.findChildren(QFrame):
+            depth = frame.property("depth")
+            if depth not in {"raised", "elevated"}:
+                continue
+
+            frame.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+
+            effect = frame.graphicsEffect()
+            if not isinstance(effect, QGraphicsDropShadowEffect):
+                effect = QGraphicsDropShadowEffect(frame)
+                effect.setOffset(0, 0)
+                frame.setGraphicsEffect(effect)
+
+            if depth == "elevated":
+                effect.setBlurRadius(30)
+                effect.setOffset(0, 10)
+            else:
+                effect.setBlurRadius(22)
+                effect.setOffset(0, 6)
+
+            if self._theme_manager.tokens.is_dark:
+                effect.setColor(QColor(6, 10, 18, 170 if depth == "elevated" else 120))
+            else:
+                effect.setColor(QColor(37, 66, 110, 48 if depth == "elevated" else 32))
 
     def _open_folder(self) -> None:
         self.generate_tab.browse_btn.click()
@@ -277,7 +307,7 @@ class CodeParserWorkbench(WindowShell):
         self._settings = settings or QSettings()
         self._system_theme_watcher: SystemThemeWatcher | None = None
         self.setWindowTitle("CodeParser")
-        self.title_bar.set_subtitle("Repository intelligence packer")
+        self.title_bar.set_subtitle("Repository Packer")
 
         content = _WorkbenchContent(theme_manager, self._settings, initial_target)
         self.set_workbench(content)

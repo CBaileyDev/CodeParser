@@ -60,7 +60,17 @@ class ToggleSwitch(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self.setChecked(not self._checked)
+            # Begin the knob animation immediately on click, then fire the
+            # toggled signal after a short delay so the first animation frame
+            # renders before any heavyweight slot (e.g. stylesheet reparse) runs.
+            new_state = not self._checked
+            self._checked = new_state
+            self._anim.stop()
+            self._anim.setStartValue(self._offset)
+            self._anim.setEndValue(self._target_offset())
+            self._anim.start()
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(80, lambda: self.toggled.emit(self._checked))
             event.accept()
             return
         super().mouseReleaseEvent(event)

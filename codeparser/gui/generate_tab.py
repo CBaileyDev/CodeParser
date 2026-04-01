@@ -83,11 +83,12 @@ class GenerateTab(QWidget):
         hero = QFrame(self)
         hero.setObjectName("CodeParserPanel")
         hero.setProperty("surface", "panel")
+        hero.setProperty("depth", "raised")
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(20, 20, 20, 20)
         hero_layout.setSpacing(12)
 
-        eyebrow = QLabel("GENERATE WORKFLOW", hero)
+        eyebrow = QLabel("Directory to parse", hero)
         eyebrow.setObjectName("CodeParserEyebrow")
         hero_layout.addWidget(eyebrow)
 
@@ -97,7 +98,7 @@ class GenerateTab(QWidget):
         hero_layout.addWidget(title)
 
         body = QLabel(
-            "Choose a local folder or GitHub repository, pick an output format, and generate a single packed file.",
+            "Choose a local folder or GitHub repository.",
             hero,
         )
         body.setObjectName("CodeParserBody")
@@ -134,6 +135,7 @@ class GenerateTab(QWidget):
         options_surface = QFrame(self)
         options_surface.setObjectName("CodeParserSurface")
         options_surface.setProperty("surface", "panel")
+        options_surface.setProperty("depth", "raised")
         options_layout = QVBoxLayout(options_surface)
         options_layout.setContentsMargins(20, 16, 20, 16)
         options_layout.setSpacing(12)
@@ -185,6 +187,7 @@ class GenerateTab(QWidget):
 
         self.generate_btn = QPushButton("Generate")
         self.generate_btn.setProperty("variant", "primary")
+        self.generate_btn.setProperty("emphasis", "hero")
         self.generate_btn.clicked.connect(self._on_generate)
         action_row.addWidget(self.generate_btn)
 
@@ -195,6 +198,7 @@ class GenerateTab(QWidget):
         preview_surface = QFrame(self)
         preview_surface.setObjectName("CodeParserSurface")
         preview_surface.setProperty("surface", "panel")
+        preview_surface.setProperty("depth", "raised")
         preview_layout = QHBoxLayout(preview_surface)
         preview_layout.setContentsMargins(20, 14, 20, 14)
         preview_layout.setSpacing(20)
@@ -221,6 +225,7 @@ class GenerateTab(QWidget):
         self.success_banner = QFrame(self)
         self.success_banner.setObjectName("CodeParserSurface")
         self.success_banner.setProperty("surface", "elevated")
+        self.success_banner.setProperty("depth", "elevated")
         self.success_banner.setVisible(False)
         banner_layout = QVBoxLayout(self.success_banner)
         banner_layout.setContentsMargins(20, 16, 20, 16)

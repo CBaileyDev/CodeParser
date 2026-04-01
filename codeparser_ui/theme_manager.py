@@ -51,14 +51,14 @@ class ThemeTokens:
 DARK_TOKENS = ThemeTokens(
     name="dark",
     is_dark=True,
-    bg_window="#0B1016",
-    bg_panel="#111823",
-    bg_elevated="#17202C",
-    bg_input="#0F1620",
-    bg_hover="#1B2633",
-    text_primary="#E8EEF5",
-    text_secondary="#B4C0CD",
-    text_muted="#7F8B99",
+    bg_window="#060A0F",
+    bg_panel="#0C1117",
+    bg_elevated="#111820",
+    bg_input="#0A1018",
+    bg_hover="#141D28",
+    text_primary="#ECF2FA",
+    text_secondary="#D4DCE5",
+    text_muted="#8B9BAD",
     text_on_accent="#F8FBFF",
     accent="#7C9DFF",
     accent_hover="#92AEFF",
@@ -66,10 +66,10 @@ DARK_TOKENS = ThemeTokens(
     success="#3FB950",
     warning="#D29922",
     danger="#F85149",
-    border="#253041",
-    border_strong="#334358",
+    border="#1C2B3A",
+    border_strong="#283C52",
     focus_ring="rgba(124, 157, 255, 0.42)",
-    separator="rgba(255, 255, 255, 0.07)",
+    separator="rgba(255, 255, 255, 0.06)",
 )
 
 LIGHT_TOKENS = ThemeTokens(
@@ -81,8 +81,8 @@ LIGHT_TOKENS = ThemeTokens(
     bg_input="#FFFFFF",
     bg_hover="#EAF0F8",
     text_primary="#15202B",
-    text_secondary="#425466",
-    text_muted="#657487",
+    text_secondary="#1F2933",
+    text_muted="#4B5563",
     text_on_accent="#FFFFFF",
     accent="#255EDC",
     accent_hover="#2E6BFF",
@@ -148,18 +148,37 @@ def build_qss(tokens: ThemeTokens) -> str:
     QFrame#CodeParserSurface {{
         background: {bg_panel};
         border: 1px solid {border};
+        border-bottom: 2px solid {border_strong};
         border-radius: {radius_lg}px;
+    }}
+
+    QFrame#CodeParserPanel[depth="raised"],
+    QFrame#CodeParserSurface[depth="raised"] {{
+        border-color: {border};
+    }}
+
+    QFrame#CodeParserPanel[depth="raised"]:hover,
+    QFrame#CodeParserSurface[depth="raised"]:hover {{
+        background: {bg_elevated};
+        border-color: {border_strong};
     }}
 
     QFrame#appSurface[windowState="maximized"] {{
         border-radius: 0px;
+        border-bottom: 1px solid {border};
     }}
 
     QFrame[surface="elevated"],
     QFrame#CodeParserInset {{
         background: {bg_elevated};
         border: 1px solid {border};
+        border-bottom: 2px solid {border_strong};
         border-radius: {radius_lg}px;
+    }}
+
+    QFrame#CodeParserInset[depth="elevated"],
+    QFrame[surface="elevated"][depth="elevated"] {{
+        border-color: {border_strong};
     }}
 
     QWidget#sidebarPanel {{
@@ -172,20 +191,33 @@ def build_qss(tokens: ThemeTokens) -> str:
         background: transparent;
     }}
 
+    QLabel#titleIconBadge {{
+        min-width: 20px;
+        max-width: 20px;
+        min-height: 20px;
+        max-height: 20px;
+        padding: 2px;
+        background: {bg_elevated};
+        border: 1px solid {border_strong};
+        border-radius: 10px;
+    }}
+
     QLabel#titleLabel {{
-        font-size: 14px;
-        font-weight: 700;
+        font-size: 16px;
+        font-weight: 800;
         color: {text_primary};
     }}
 
     QLabel#titleSubtitle {{
-        font-size: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        padding-top: 2px;
         color: {text_muted};
     }}
 
     QLabel#CodeParserTitle {{
-        font-size: 24px;
-        font-weight: 700;
+        font-size: 28px;
+        font-weight: 800;
         color: {text_primary};
     }}
 
@@ -197,7 +229,7 @@ def build_qss(tokens: ThemeTokens) -> str:
 
     QLabel#CodeParserEyebrow {{
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 800;
         letter-spacing: 1px;
         text-transform: uppercase;
     }}
@@ -205,7 +237,7 @@ def build_qss(tokens: ThemeTokens) -> str:
     QLabel#CodeParserBody,
     QLabel[tone="secondary"] {{
         color: {text_secondary};
-        font-size: 13px;
+        font-size: 14px;
     }}
 
     QLabel#CodeParserMetric {{
@@ -284,16 +316,52 @@ def build_qss(tokens: ThemeTokens) -> str:
 
     QPushButton[variant="primary"] {{
         background: {accent};
-        border-color: transparent;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-bottom: 3px solid rgba(0, 0, 0, 0.2);
         color: {text_on_accent};
+        font-weight: 800;
+        font-size: 14px;
     }}
 
     QPushButton[variant="primary"]:hover {{
         background: {accent_hover};
+        border-bottom: 3px solid rgba(0, 0, 0, 0.3);
     }}
 
     QPushButton[variant="primary"]:pressed {{
         background: {accent_pressed};
+        border-top: 2px solid transparent;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+    }}
+
+    QPushButton[variant="primary"][emphasis="hero"] {{
+        min-height: 44px;
+        padding: 0 20px;
+        border-radius: {radius_lg}px;
+        font-size: 15px;
+        font-weight: 800;
+        background: qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 1,
+            stop: 0 {accent_hover},
+            stop: 1 {accent}
+        );
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 4px solid rgba(0, 0, 0, 0.22);
+    }}
+
+    QPushButton[variant="primary"][emphasis="hero"]:hover {{
+        background: qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 1,
+            stop: 0 #A6BCFF,
+            stop: 1 {accent_hover}
+        );
+        border-bottom: 4px solid rgba(0, 0, 0, 0.28);
+    }}
+
+    QPushButton[variant="primary"][emphasis="hero"]:pressed {{
+        background: {accent_pressed};
+        border-top: 2px solid transparent;
+        border-bottom: 2px solid rgba(0, 0, 0, 0.18);
     }}
 
     QPushButton[variant="danger"] {{
@@ -322,6 +390,37 @@ def build_qss(tokens: ThemeTokens) -> str:
 
     QPushButton#sidebarToggleButton:hover {{
         background: {bg_hover};
+    }}
+
+    /* -- Checkbox -- */
+    QCheckBox {{
+        color: {text_secondary};
+        spacing: 10px;
+        font-size: 13px;
+        font-weight: 600;
+    }}
+
+    QCheckBox::indicator {{
+        width: 16px;
+        height: 16px;
+        background: {bg_input};
+        border: 1px solid {border_strong};
+        border-radius: 5px;
+    }}
+
+    QCheckBox::indicator:hover {{
+        border-color: {accent};
+        background: {bg_hover};
+    }}
+
+    QCheckBox::indicator:checked {{
+        background: {accent};
+        border-color: {accent_pressed};
+    }}
+
+    QCheckBox::indicator:disabled {{
+        background: {bg_panel};
+        border-color: {border};
     }}
 
     /* -- Inputs -- */
